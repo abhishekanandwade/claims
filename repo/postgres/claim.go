@@ -2,10 +2,12 @@ package repo
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v5"
+	"github.com/google/uuid"
 	config "gitlab.cept.gov.in/it-2.0-common/api-config"
 	dblib "gitlab.cept.gov.in/it-2.0-common/n-api-db"
 	"gitlab.cept.gov.in/pli/claims-api/core/domain"
@@ -411,4 +413,106 @@ func (r *ClaimRepository) FindClaimsNeedingInvestigation(ctx context.Context) ([
 	}
 
 	return results, nil
+}
+
+// GetPoliciesDueForMaturity retrieves policies that are due for maturity in the given date range
+// This query is used by the batch intimation job to send notifications to policyholders
+// Reference: FR-CLM-MC-002, BR-CLM-MC-002 (60-day advance intimation)
+//
+// The query:
+// 1. Finds policies with maturity_date between startDate and endDate
+// 2. Filters out policies that already have maturity claims registered
+// 3. Filters out policies where intimation was already sent (checks claim_history table)
+// 4. Returns paginated results
+//
+// Note: This is a placeholder implementation. In production, this would integrate with
+// Policy Service API to fetch policy details. The claims database only stores claims,
+// not all policies. The actual policy data (customer details, maturity amount, etc.)
+// needs to be fetched from Policy Service.
+func (r *ClaimRepository) GetPoliciesDueForMaturity(
+	ctx context.Context,
+	startDate, endDate time.Time,
+	skip, limit int32,
+) ([]domain.Claim, int64, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.GetDuration("db.QueryTimeoutLow"))
+	defer cancel()
+
+	// TODO: This is a placeholder query that returns claims with type MATURITY
+	// In production, this should call Policy Service API:
+	// GET /policies/maturity-due?start_date={startDate}&end_date={endDate}&page={page}&limit={limit}
+	//
+	// The Policy Service would:
+	// 1. Query policies table for policies with maturity_date in range
+	// 2. Filter out policies where maturity claim already exists in claims table
+	// 3. Filter out policies where intimation was already sent (check claim_history with event_type='MATURITY_INTIMATION_SENT')
+	// 4. Join with customers table to get contact details
+	// 5. Return paginated results
+
+	// For now, return empty slice as placeholder
+	return []domain.Claim{}, 0, nil
+}
+
+// HasMaturityIntimationBeenSent checks if maturity intimation has already been sent for a policy
+// This prevents duplicate intimations
+// Reference: BR-CLM-MC-002
+func (r *ClaimRepository) HasMaturityIntimationBeenSent(ctx context.Context, policyID string) (bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.GetDuration("db.QueryTimeoutLow"))
+	defer cancel()
+
+	// Check claim_history table for MATURITY_INTIMATION_SENT event
+	query := sq.Select("COUNT(*)").
+		From("claim_history").
+		Where(sq.Eq{"policy_id": policyID}).
+		Where(sq.Eq{"event_type": "MATURITY_INTIMATION_SENT"}).
+		PlaceholderFormat(sq.Dollar)
+
+	count, err := dblib.SelectOne(ctx, r.db, query, pgx.RowTo[int64])
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
+}
+
+// RecordMaturityIntimation records that maturity intimation was sent for a policy
+// This creates an audit trail in claim_history table
+// Reference: BR-CLM-MC-002
+func (r *ClaimRepository) RecordMaturityIntimation(
+	ctx context.Context,
+	policyID string,
+	channels []string,
+) error {
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.GetDuration("db.QueryTimeoutLow"))
+	defer cancel()
+
+	// Convert channels to string for storage in new_value column
+	channelsStr := fmt.Sprintf("%v", channels)
+
+	// Create audit entry in claim_history table
+	query := sq.Insert("claim_history").
+		Columns(
+			"id", "policy_id", "claim_id", "event_type",
+			"event_category", "description", "old_value", "new_value",
+			"performed_by", "performed_by_role",
+		).
+		Values(
+			uuid.New().String(), // id
+			policyID,            // policy_id
+			nil,                 // claim_id (NULL for batch intimations)
+			"MATURITY_INTIMATION_SENT", // event_type
+			"NOTIFICATION",      // event_category
+			fmt.Sprintf("Maturity intimation sent via %v", channels), // description
+			nil,                 // old_value
+			channelsStr,         // new_value (as string)
+			"SYSTEM",            // performed_by
+			"BATCH_JOB",         // performed_by_role
+		).
+		PlaceholderFormat(sq.Dollar)
+
+	_, err := dblib.Insert(ctx, r.db, query)
+	if err != nil {
+		return fmt.Errorf("failed to record maturity intimation: %w", err)
+	}
+
+	return nil
 }

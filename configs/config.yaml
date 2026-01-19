@@ -60,3 +60,16 @@ db:
 info:
   name: "claims-api"
   version: "1.0.0"
+
+# Batch job configuration
+batch:
+  # Maturity intimation job settings
+  maturity_intimation:
+    enabled: true                           # Enable/disable batch job
+    schedule: "0 0 9 * * *"                 # Cron schedule (daily at 9:00 AM)
+    days_in_advance: 60                      # Days before maturity to send intimation (BR-CLM-MC-002)
+    batch_size: 100                          # Number of policies to process per batch
+    notification_channels:                   # Notification channels to use
+      - "SMS"
+      - "EMAIL"
+      # - "WHATSAPP"                        # Optional: Enable WhatsApp notifications
