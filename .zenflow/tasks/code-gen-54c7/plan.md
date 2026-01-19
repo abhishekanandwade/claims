@@ -185,7 +185,8 @@ go build ./core/port/...
 
 ---
 
-### [ ] Task 1.4: Create Domain Models (14 Entities)
+### [x] Task 1.4: Create Domain Models (14 Entities)
+<!-- chat-id: 5fcdde66-6544-4f80-83e4-0afa292a9ea7 -->
 **Reference**: `seed/template/template.md` - Domain Model Pattern section
 **Reference**: `seed/db/claims_database_schema.sql` - Table definitions
 
@@ -211,6 +212,8 @@ Each model must:
 - Match database column names exactly
 - Include ID, CreatedAt, UpdatedAt, DeletedAt fields
 - Use appropriate Go types (string for UUID, *string for optional, time.Time for dates)
+
+**Status**: ✅ Completed
 
 **Verification**:
 ```bash
