@@ -1122,6 +1122,7 @@ go build ./repo/postgres/notification_client.go
 ---
 
 ### [ ] Task 4.4: Register handlers in bootstrap
+<!-- chat-id: 0cd8b560-e696-46ee-b630-a4ddc7f354b1 -->
 **Reference**: `seed/template/template.md` - Bootstrap Configuration section
 
 **Steps**:
