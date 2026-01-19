@@ -491,8 +491,11 @@ cd handler && govalid
 
 ---
 
-### [ ] Task 2.4: Create Death Claim Response DTOs
+### [x] Task 2.4: Create Death Claim Response DTOs
+<!-- chat-id: fcb1777c-7867-42d4-9ebf-a3ae5db35124 -->
 **Reference**: `seed/template/template.md` - Response DTO Pattern section
+
+**Status**: ✅ Completed
 
 **Steps**:
 Create `handler/response/claim.go`:
@@ -511,7 +514,32 @@ Create `handler/response/claim.go`:
 **Verification**:
 ```bash
 go build ./handler/response/...
+# ✅ Compilation successful
 ```
+
+**Key Deliverables**:
+- Created `handler/response/claim.go` (650+ lines) with comprehensive response DTOs for death claim endpoints
+- Implemented 25+ response DTOs covering:
+  - **Death Claim Core (15 endpoints)**: DeathClaimResponse, DeathClaimRegisteredResponse, DeathClaimsListResponse, DocumentChecklistResponse, ClaimAmountCalculationResponse, DocumentCompletenessResponse, BenefitCalculationResponse, EligibleApproversResponse, ApprovalDetailsResponse, ClaimApprovalResponse, ClaimRejectionResponse, ClaimDisbursementResponse, ClaimCloseResponse, ClaimCancelResponse, ClaimReturnResponse
+  - **Supporting DTOs**: WorkflowStateResponse, ClaimCalculationData, ClaimCalculationBreakdown, DocumentChecklistItem, DynamicDocumentChecklistData, DocumentCompletenessData, PolicyDetailsResponse, ClaimantDetailsResponse, RedFlag, FraudRedFlagsData, BankValidationData, ClaimApprovalData, ClaimRejectionData, ClaimDisbursementData, ClaimCloseData, ClaimCancelData, ClaimReturnData, ApproverInfo
+  - **Helper Functions**: NewDeathClaimResponse(), NewDeathClaimsResponse(), NewWorkflowStateResponse(), calculateSLAStatus()
+- All response DTOs follow template.md pattern:
+  - Embed `port.StatusCodeAndMessage` for status info
+  - Embed `port.MetaDataResponse` for list responses (pagination)
+  - Use `json:",inline"` for embedded structs
+  - Format timestamps as strings: `"2006-01-02 15:04:05"`
+  - Use `snake_case` for JSON field names
+- Business rule references included in comments (FR-CLM-DC-001, BR-CLM-DC-001, BR-CLM-DC-008, BR-CLM-DC-015, CALC-001, DFC-001, etc.)
+- All fields properly mapped from domain.Claim model
+- Proper handling of optional/pointer fields from domain model
+- Code compiles successfully with go build
+
+**Notes**:
+- DeathClaimResponse maps all fields from domain.Claim with proper pointer handling
+- NewDeathClaimResponse() safely handles all optional fields with nil checks
+- WorkflowStateResponse calculates SLA status dynamically based on deadline
+- All response DTOs use inline embedding for clean JSON structure
+- Comprehensive coverage for all death claim endpoints from swagger specification
 
 ---
 
