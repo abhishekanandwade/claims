@@ -541,3 +541,72 @@ type FileAMLReportRequest struct {
 	FilingDate       string `json:"filing_date" validate:"required"` // YYYY-MM-DD format
 	Acknowledgement  bool    `json:"acknowledgement" validate:"required"`
 }
+
+// ==================== BANKING & PAYMENT REQUEST DTOs ====================
+
+// BankValidationRequest represents the request for bank account validation
+// POST /banking/validate-account
+// POST /banking/validate-account-cbs
+// POST /banking/validate-account-pfms
+// POST /banking/penny-drop
+// Reference: BR-CLM-DC-010 (Payment Disbursement Workflow)
+// Reference: Integration with CBS API and PFMS API
+type BankValidationRequest struct {
+	AccountNumber     string `json:"account_number" validate:"required,max=50"`
+	IFSCCode          string `json:"ifsc_code" validate:"required,max=20"`
+	AccountHolderName string `json:"account_holder_name" validate:"required,max=200"`
+	ValidationMethod  *string `json:"validation_method,omitempty" validate:"omitempty,oneof=CBS_API PFMS_API PENNY_DROP"`
+	ClaimID           *string `json:"claim_id,omitempty" validate:"omitempty,max=50"`
+}
+
+// InitiateNEFTTransferRequest represents the request for NEFT transfer
+// POST /banking/neft-transfer
+// Reference: BR-CLM-DC-010 (Disbursement Workflow)
+type InitiateNEFTTransferRequest struct {
+	AccountNumber   string  `json:"account_number" validate:"required,max=50"`
+	IFSCCode        string  `json:"ifsc_code" validate:"required,max=20"`
+	Amount          float64 `json:"amount" validate:"required,gt=0"`
+	BeneficiaryName string  `json:"beneficiary_name" validate:"required,max=200"`
+	ReferenceID     *string `json:"reference_id,omitempty" validate:"omitempty,max=50"`
+	ClaimID         *string `json:"claim_id,omitempty" validate:"omitempty,max=50"`
+	PaymentMode     *string `json:"payment_mode,omitempty" validate:"omitempty,oneof=NEFT RTGS IMPS"`
+	Remarks         *string `json:"remarks,omitempty" validate:"omitempty,max=500"`
+}
+
+// ReconcilePaymentsRequest represents the request for daily payment reconciliation
+// POST /banking/payment-reconciliation
+// Reference: BR-CLM-PAY-001 (Daily Reconciliation)
+type ReconcilePaymentsRequest struct {
+	ReconciliationDate string `json:"reconciliation_date" validate:"required"` // YYYY-MM-DD format
+	IncludeFailed      *bool  `json:"include_failed,omitempty" validate:"omitempty"`
+	IncludePending     *bool  `json:"include_pending,omitempty" validate:"omitempty"`
+}
+
+// PaymentIDUri represents the payment_id URI parameter
+// GET /banking/payment-status/{payment_id}
+type PaymentIDUri struct {
+	PaymentID string `uri:"payment_id" validate:"required"`
+}
+
+// PaymentConfirmationWebhookRequest represents the webhook request from banking gateway
+// POST /webhooks/banking/payment-confirmation
+// Reference: Integration with Banking Gateway
+type PaymentConfirmationWebhookRequest struct {
+	PaymentID     string  `json:"payment_id" validate:"required"`
+	Status        string  `json:"status" validate:"required,oneof=SUCCESS FAILED PENDING"`
+	TransactionID string  `json:"transaction_id" validate:"required,max=100"`
+	Amount        *float64 `json:"amount,omitempty" validate:"omitempty,gt=0"`
+	Timestamp     string  `json:"timestamp" validate:"required"` // YYYY-MM-DD HH:MM:SS format
+	FailureReason *string `json:"failure_reason,omitempty" validate:"omitempty,max=500"`
+	BankReference *string `json:"bank_reference,omitempty" validate:"omitempty,max=100"`
+}
+
+// GeneratePaymentVoucherRequest represents the request for generating payment voucher
+// POST /banking/generate-voucher
+// Reference: BR-CLM-PAY-002 (Voucher Generation)
+type GeneratePaymentVoucherRequest struct {
+	ClaimID      string `json:"claim_id" validate:"required,max=50"`
+	PaymentID    string `json:"payment_id" validate:"required,max=50"`
+	VoucherType  *string `json:"voucher_type,omitempty" validate:"omitempty,oneof=PAYMENT RECEIPT JOURNAL"`
+	IncludeStamp *bool   `json:"include_stamp,omitempty" validate:"omitempty"`
+}
