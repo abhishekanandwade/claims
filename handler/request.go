@@ -348,3 +348,113 @@ type RecordAppealDecisionRequest struct {
 	ReasonedOrder  string  `json:"reasoned_order" validate:"required,max=5000"`
 	ModificationDetails *string `json:"modification_details,omitempty" validate:"omitempty,max=2000"`
 }
+
+// ========================================
+// MATURITY CLAIM REQUEST DTOS
+// ========================================
+
+// SendMaturityIntimationBatchRequest represents the request for sending maturity intimation batch
+// POST /claims/maturity/send-intimation-batch
+// Reference: FR-CLM-MC-002, BR-CLM-MC-002 (60 days before maturity)
+type SendMaturityIntimationBatchRequest struct {
+	MaturityDateFrom string   `json:"maturity_date_from" validate:"required" example:"2024-03-01"`
+	MaturityDateTo   string   `json:"maturity_date_to" validate:"required" example:"2024-03-31"`
+	Channels         []string `json:"channels" validate:"required,dive,oneof=SMS EMAIL WHATSAPP"`
+}
+
+// GenerateMaturityDueReportRequest represents the request for generating maturity due report
+// POST /claims/maturity/generate-due-report
+type GenerateMaturityDueReportRequest struct {
+	ReportMonth int `json:"report_month" validate:"required,min=1,max=12"`
+	ReportYear  int `json:"report_year" validate:"required,min=2020,max=2100"`
+}
+
+// GetMaturityPreFillDataRequest represents the request for getting pre-filled data
+// GET /claims/maturity/pre-fill-data
+type GetMaturityPreFillDataRequest struct {
+	PolicyID string `uri:"policy_id" validate:"required"`
+	Token    string `uri:"token" validate:"required"`
+}
+
+// SubmitMaturityClaimRequest represents the request for submitting maturity claim
+// POST /claims/maturity/submit
+// Reference: BR-CLM-MC-001 (7 days SLA)
+type SubmitMaturityClaimRequest struct {
+	PolicyID             string   `json:"policy_id" validate:"required"`
+	ClaimantName         string   `json:"claimant_name" validate:"required,max=200"`
+	ClaimantRelationship string   `json:"claimant_relationship" validate:"required,max=100"`
+	ClaimantMobile       string   `json:"claimant_mobile" validate:"required,len=10"`
+	ClaimantEmail        string   `json:"claimant_email" validate:"required,email"`
+	DisbursementMode     string   `json:"disbursement_mode" validate:"required,oneof=NEFT POSB CHEQUE"`
+	BankAccountNumber    string   `json:"bank_account_number" validate:"required,max=50"`
+	BankIFSC             string   `json:"bank_ifsc" validate:"required,len=11"`
+	BankAccountType      string   `json:"bank_account_type" validate:"required,oneof=Savings Current"`
+	Documents            []string `json:"documents" validate:"required,dive,max=100"`
+	IsNRI                bool     `json:"is_nri"`
+	NRICountry           *string  `json:"nri_country,omitempty" validate:"omitempty,max=100"`
+	IsPANAvailable       bool     `json:"is_pan_available"`
+	PANNumber            *string  `json:"pan_number,omitempty" validate:"omitempty,len=10"`
+	Acknowledgement      bool     `json:"acknowledgement" validate:"required"`
+}
+
+// ExtractOCRDataRequest represents the request for extracting OCR data
+// POST /claims/maturity/{claim_id}/extract-ocr-data
+type ExtractOCRDataRequest struct {
+	ClaimID     string   `uri:"claim_id" validate:"required"`
+	DocumentIDs []string `json:"document_ids" validate:"required,dive,max=100"`
+}
+
+// QCVerifyMaturityClaimRequest represents the request for QC verification
+// POST /claims/maturity/{claim_id}/qc-verify
+type QCVerifyMaturityClaimRequest struct {
+	ClaimID    string                 `uri:"claim_id" validate:"required"`
+	QCStatus   string                 `json:"qc_status" validate:"required,oneof=APPROVED REJECTED CORRECTIONS_REQUIRED"`
+	Corrections map[string]interface{} `json:"corrections,omitempty"`
+	QCRemarks  *string                `json:"qc_remarks,omitempty" validate:"omitempty,max=2000"`
+}
+
+// ApproveMaturityClaimRequest represents the request for approving maturity claim
+// POST /claims/maturity/{claim_id}/approve
+type ApproveMaturityClaimRequest struct {
+	ClaimID             string  `uri:"claim_id" validate:"required"`
+	ApprovalStatus      string  `json:"approval_status" validate:"required,oneof=APPROVED REJECTED"`
+	ApprovalAmount      float64 `json:"approval_amount" validate:"required,gt=0"`
+	ApprovalRemarks     string  `json:"approval_remarks" validate:"required,max=2000"`
+	ApproverID          string  `json:"approver_id" validate:"required"`
+	ApprovalLevel       string  `json:"approval_level" validate:"required,oneof=LEVEL_1 LEVEL_2 LEVEL_3 LEVEL_4"`
+	CalculationOverride bool    `json:"calculation_override"`
+	OverrideReason      *string `json:"override_reason,omitempty" validate:"omitempty,max=1000"`
+}
+
+// DisburseMaturityClaimRequest represents the request for disbursement
+// POST /claims/maturity/{claim_id}/disburse
+type DisburseMaturityClaimRequest struct {
+	ClaimID            string  `uri:"claim_id" validate:"required"`
+	DisbursementAmount float64 `json:"disbursement_amount" validate:"required,gt=0"`
+	DisbursementMode   string  `json:"disbursement_mode" validate:"required,oneof=NEFT POSB CHEQUE"`
+	ReferenceNumber    string  `json:"reference_number" validate:"required,max=100"`
+	DisbursementDate   string  `json:"disbursement_date" validate:"required"`
+	BankAccountNumber  string  `json:"bank_account_number" validate:"required,max=50"`
+	BankIFSC           string  `json:"bank_ifsc" validate:"required,len=11"`
+	DisburseTo         string  `json:"disburse_to" validate:"required,max=200"`
+	UTRNumber          *string `json:"utr_number,omitempty" validate:"omitempty,max=50"`
+	ChequeNumber       *string `json:"cheque_number,omitempty" validate:"omitempty,max=20"`
+	ChequeDate         *string `json:"cheque_date,omitempty" validate:"omitempty"`
+}
+
+// CloseMaturityClaimRequest represents the request for closing maturity claim
+// POST /claims/maturity/{claim_id}/close
+type CloseMaturityClaimRequest struct {
+	ClaimID        string  `uri:"claim_id" validate:"required"`
+	ClosureDate    string  `json:"closure_date" validate:"required"`
+	ClosureReason  string  `json:"closure_reason" validate:"required,max=1000"`
+	ClosedBy       string  `json:"closed_by" validate:"required"`
+}
+
+// RequestMaturityFeedbackRequest represents the request for requesting feedback
+// POST /claims/maturity/{claim_id}/request-feedback
+type RequestMaturityFeedbackRequest struct {
+	ClaimID     string `uri:"claim_id" validate:"required"`
+	Channel     string `json:"channel" validate:"required,oneof=SMS EMAIL WHATSAPP"`
+	FeedbackURL string `json:"feedback_url" validate:"required,url"`
+}
