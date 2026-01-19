@@ -488,3 +488,56 @@ type SubmitSurvivalBenefitClaimRequest struct {
 type ValidateSBEligibilityRequest struct {
 	ClaimID string `uri:"id" validate:"required"`
 }
+
+// ==================== AML/CFT REQUEST DTOs ====================
+
+// DetectAMLTriggerRequest represents the request for detecting AML trigger conditions
+// POST /aml/detect-trigger
+// Reference: FR-CLM-AML-001, BR-CLM-AML-001 (High Cash Premium Alert)
+// Reference: BR-CLM-AML-002 (PAN Mismatch Alert)
+// Reference: BR-CLM-AML-003 (Nominee Change Post Death)
+type DetectAMLTriggerRequest struct {
+	TransactionType   string  `json:"transaction_type" validate:"required,oneof=PREMIUM CLAIM DISBURSEMENT REFUND"`
+	TransactionAmount float64 `json:"transaction_amount" validate:"required,gt=0"`
+	PolicyID          *string `json:"policy_id,omitempty" validate:"omitempty,max=50"`
+	CustomerID        *string `json:"customer_id,omitempty" validate:"omitempty,max=50"`
+	PaymentMode       *string `json:"payment_mode,omitempty" validate:"omitempty,oneof=CASH CHEQUE NEFT POSB DD"`
+	PANNumber         *string `json:"pan_number,omitempty" validate:"omitempty,len=10"`
+	BankAccountNumber *string `json:"bank_account_number,omitempty" validate:"omitempty,max=50"`
+	NomineeID         *string `json:"nominee_id,omitempty" validate:"omitempty,max=50"`
+	TransactionDate   string  `json:"transaction_date" validate:"required"` // YYYY-MM-DD format
+}
+
+// AlertIDUri represents the alert_id URI parameter
+type AlertIDUri struct {
+	AlertID string `uri:"alert_id" validate:"required"`
+}
+
+// ReviewAMLAlertRequest represents the request for reviewing AML alert
+// POST /aml/{alert_id}/review
+// Reference: BR-CLM-AML-004 (Risk Scoring Algorithm)
+// Reference: BR-CLM-AML-005 (Alert Review)
+type ReviewAMLAlertRequest struct {
+	AlertID         string `uri:"alert_id" validate:"required"`
+	ReviewDecision  string `json:"review_decision" validate:"required,oneof=CLEAR FILE_STR FILE_CTR BLOCK_TRANSACTION ESCALATE"`
+	OfficerRemarks  string `json:"officer_remarks" validate:"required,max=2000"`
+	EscalationLevel *string `json:"escalation_level,omitempty" validate:"omitempty,oneof=LEVEL_1 LEVEL_2 LEVEL_3"`
+	OfficerID       string `json:"officer_id" validate:"required"`
+}
+
+// FileAMLReportRequest represents the request for filing STR/CTR with regulatory authorities
+// POST /aml/{alert_id}/file-report
+// Reference: BR-CLM-AML-006 (STR Filing Within 7 Days)
+// Reference: BR-CLM-AML-007 (CTR Filing Monthly)
+type FileAMLReportRequest struct {
+	AlertID          string `uri:"alert_id" validate:"required"`
+	ReportType       string `json:"report_type" validate:"required,oneof=STR CTR CCR NTR"`
+	ReportingAgency  string `json:"reporting_agency" validate:"required,oneof=FINNET FINGATE"`
+	FilingReference  string `json:"filing_reference" validate:"required,max=100"`
+	ReportDetails    string `json:"report_details" validate:"required,max=5000"`
+	Attachments      []string `json:"attachments,omitempty" validate:"omitempty,dive,max=200"`
+	SupportingDocs   []string `json:"supporting_docs,omitempty" validate:"omitempty,dive,max=200"`
+	FiledBy          string `json:"filed_by" validate:"required"`
+	FilingDate       string `json:"filing_date" validate:"required"` // YYYY-MM-DD format
+	Acknowledgement  bool    `json:"acknowledgement" validate:"required"`
+}
