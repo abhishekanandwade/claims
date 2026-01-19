@@ -1934,6 +1934,7 @@ go build ./repo/postgres/...
 ---
 
 ### [ ] Task 7.2: Implement OmbudsmanHandler
+<!-- chat-id: bf961a02-00a7-4dae-9f95-f66702b7565c -->
 **Reference**: `seed/swagger/` - Ombudsman endpoints
 
 **Steps**:
