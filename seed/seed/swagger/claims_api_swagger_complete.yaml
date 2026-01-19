@@ -1,0 +1,3831 @@
+openapi: 3.0.3
+info:
+  title: PLI Claims Processing API - Complete Specification
+  version: 1.0.0
+  description: |
+    **Complete API specification for India Post Life Insurance (PLI) Claims Processing Module**
+
+    This specification includes ALL 130+ endpoints identified from comprehensive user journey analysis.
+
+    ## Supported Claim Types
+    - Death Claims (Standard & Investigation)
+    - Maturity Claims (Online & Offline)
+    - Survival Benefit Claims
+    - Free Look Cancellations
+    - AML/CFT Alert Processing
+
+    ## API Categories (130+ Endpoints)
+    1. **Death Claims Core** (15 endpoints) - Registration, approval, disbursement
+    2. **Death Claims Investigation** (10 endpoints) - Investigation workflow
+    3. **Maturity Claims** (12 endpoints) - Maturity processing
+    4. **Survival Benefit Claims** (5 endpoints) - SB processing
+    5. **Appeal Workflow** (3 endpoints) - Appeal handling
+    6. **AML/CFT** (7 endpoints) - AML detection and filing
+    7. **Policy Services** (8 endpoints) - Policy validation and calculation
+    8. **Banking Services** (8 endpoints) - Bank validation and payments
+    9. **Document Management** (10 endpoints) - ECMS integration
+    10. **Lookup & Reference** (12 endpoints) - Dropdowns and master data
+    11. **Validation Services** (8 endpoints) - Pre-submission validations
+    12. **Workflow Management** (6 endpoints) - Temporal workflow
+    13. **Notifications** (5 endpoints) - Multi-channel communication
+    14. **Reporting & Analytics** (8 endpoints) - Claims reports
+    15. **Audit & Compliance** (5 endpoints) - Audit trail
+    16. **Integration Services** (8 endpoints) - External system APIs
+
+  contact:
+    name: PLI Development Team
+    email: dev@pli.gov.in
+    url: https://pli.indiapost.gov.in
+  license:
+    name: Government of India
+
+servers:
+  - url: https://api.pli.gov.in/v1
+    description: Production Server
+  - url: https://api-staging.pli.gov.in/v1
+    description: Staging Server
+  - url: http://localhost:8080/v1
+    description: Development Server
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Death Claims - Core
+    description: Death claim registration, approval, disbursement
+  - name: Death Claims - Investigation
+    description: Investigation workflow management
+  - name: Death Claims - Appeal
+    description: Appeal and grievance redressal
+  - name: Death Claims - Queue Management
+    description: Approval and payment queues
+  - name: Maturity Claims
+    description: Maturity claim processing
+  - name: Survival Benefit Claims
+    description: Survival benefit claim processing
+  - name: Policy Services
+    description: Policy validation, eligibility, benefit calculation
+  - name: Banking & Payment
+    description: Bank validation, NEFT transfers, payment confirmation
+  - name: Document Management
+    description: Document upload, OCR, virus scan, archival
+  - name: Lookup & Reference Data
+    description: Master data for dropdowns and validations
+  - name: Validation Services
+    description: Pre-submission validation APIs
+  - name: Workflow Management
+    description: Temporal workflow orchestration
+  - name: Notifications
+    description: SMS, Email, WhatsApp communications
+  - name: Reporting & Analytics
+    description: Claims reports and dashboards
+  - name: AML/CFT
+    description: AML alert detection, risk scoring, regulatory filing
+  - name: Audit & Compliance
+    description: Audit trail and compliance logging
+  - name: Integration Services
+    description: External system integrations (CBS, PFMS, DigiLocker)
+
+paths:
+  # ========================================
+  # DEATH CLAIMS - CORE OPERATIONS
+  # ========================================
+
+  /claims/death/register:
+    post:
+      tags:
+        - Death Claims - Core
+      summary: Register a new death claim
+      description: |
+        Register death claim with automatic investigation trigger detection.
+
+        **Related**: FR-CLM-DC-001, BR-CLM-DC-001, WF-CLM-DC-001
+      operationId: registerDeathClaim
+      requestBody:
+        $ref: '#/components/requestBodies/DeathClaimRegistration'
+      responses:
+        '201':
+          $ref: '#/components/responses/DeathClaimRegistered'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /claims/death/calculate-amount:
+    post:
+      tags:
+        - Death Claims - Core
+      summary: Pre-calculate death claim amount (before registration)
+      description: |
+        Calculate estimated death claim amount for customer information.
+        This is a pre-submission calculation API.
+
+        **Related**: CALC-001
+      operationId: preCalculateDeathClaim
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - policy_id
+                - death_date
+              properties:
+                policy_id:
+                  type: string
+                death_date:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: Estimated claim amount calculated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimCalculationResponse'
+
+  /claims/death/{claim_id}/document-checklist:
+    get:
+      tags:
+        - Death Claims - Core
+      summary: Get document checklist for death claim
+      description: |
+        Retrieve complete document checklist with mandatory/optional status.
+
+        **Related**: FR-CLM-DC-002, VR-CLM-DC-001 to VR-CLM-DC-007
+      operationId: getDeathClaimDocumentChecklist
+      parameters:
+        - $ref: '#/components/parameters/ClaimIdPath'
+      responses:
+        '200':
+          description: Document checklist retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentChecklist'
+
+  /claims/death/document-checklist-dynamic:
+    get:
+      tags:
+        - Death Claims - Core
+      summary: Get dynamic document checklist based on claim context
+      description: |
+        Get context-aware document checklist that changes based on death type,
+        nomination status, and policy type.
+
+        **Related**: DFC-001
+      operationId: getDynamicDocumentChecklist
+      parameters:
+        - name: death_type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [NATURAL, UNNATURAL, ACCIDENTAL, SUICIDE, HOMICIDE]
+        - name: nomination_status
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [PRESENT, ABSENT]
+        - name: policy_type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [STANDARD, ENDOWMENT, WHOLE_LIFE, TERM]
+      responses:
+        '200':
+          description: Dynamic checklist generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DynamicDocumentChecklist'
+
+  /claims/death/{claim_id}/documents:
+    post:
+      tags:
+        - Death Claims - Core
+        - Document Management
+      summary: Upload document for death claim
+      operationId: uploadDeathClaimDocument
+      parameters:
+        - $ref: '#/components/parameters/ClaimIdPath'
+      requestBody:
+        $ref: '#/components/requestBodies/DocumentUpload'
+      responses:
+        '201':
+          $ref: '#/components/responses/DocumentUploaded'
+
+  /claims/death/{claim_id}/document-completeness:
+    get:
+      tags:
+        - Death Claims - Core
+      summary: Check if all mandatory documents are uploaded
+      operationId: checkDocumentCompleteness
+      parameters:
+        - $ref: '#/components/parameters/ClaimIdPath'
+      responses:
+        '200':
+          description: Document completeness status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  claim_id:
+                    type: string
+                  documents_complete:
+                    type: boolean
+                  mandatory_count:
+                    type: integer
+                  uploaded_count:
+                    type: integer
+                  missing_documents:
+                    type: array
+                    items:
+                      type: string
+
+  /claims/death/{claim_id}/send-reminder:
+    post:
+      tags:
+        - Death Claims - Core
+        - Notifications
+      summary: Send document submission reminder
+      description: Automated API to send reminders for missing documents
+      operationId: sendDocumentReminder
+      parameters:
+        - $ref: '#/components/parameters/ClaimIdPath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - reminder_type
+              properties:
+                reminder_type:
+                  type: string
+                  enum: [MISSING_DOCUMENTS, SLA_WARNING, FINAL_NOTICE]
+                channels:
+                  type: array
+                  items:
+                    type: string
+                    enum: [SMS, EMAIL, WHATSAPP]
+      responses:
+        '200':
+          description: Reminder sent successfully
+
+  /claims/death/{claim_id}/calculate-benefit:
+    post:
+      tags:
+        - Death Claims - Core
+      summary: Calculate death claim benefit amount
+      description: |
+        Official calculation of death claim amount with breakdown.
+        Formula: SA + Bonuses - Loans - Unpaid Premiums
+
+        **Related**: FR-CLM-DC-004, BR-CLM-DC-008
+      operationId: calculateDeathClaimBenefit
+      parameters:
+        - $ref: '#/components/parameters/ClaimIdPath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                manual_override:
+                  type: boolean
+                  default: false
+                override_reason:
+                  type: string
+                supervisor_approval:
+                  type: string
+      responses:
+        '200':
+          $ref: '#/components/responses/ClaimCalculated'
+
+  /claims/death/{claim_id}/calculation/override:
+    post:
+      tags:
+        - Death Claims - Core
+      summary: Override automated calculation (requires supervisor approval)
+      operationId: overrideCalculation
+      parameters:
+        - $ref: '#/components/parameters/ClaimIdPath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - override_amount
+                - override_reason
+                - supervisor_id
+              properties:
+                override_amount:
+                  type: number
+                override_reason:
+                  type: string
+                supervisor_id:
+                  type: string
+      responses:
+        '200':
+          description: Override approved
+
+  /claims/death/{claim_id}/calculation/approve:
+    post:
+      tags:
+        - Death Claims - Core
+      summary: Approve calculation results
+      operationId: approveCalculation
+      parameters:
+        - $ref: '#/components/parameters/ClaimIdPath'
+      responses:
+        '200':
+          description: Calculation approved
+
+  /claims/death/{claim_id}/eligible-approvers:
+    get:
+      tags:
+        - Death Claims - Core
+      summary: Get list of eligible approvers based on claim amount
+      description: |
+        Returns approvers based on approval hierarchy (BR-CLM-DC-015).
+
+        **Hierarchy**:
+        - Up to ₹1L: Postmaster
+        - ₹1-5L: Superintendent
+        - ₹5-10L: Senior Superintendent
+        - Above ₹10L: Chief Postmaster General
+      operationId: getEligibleApprovers
+      parameters:
+        - $ref: '#/components/parameters/ClaimIdPath'
+      responses:
+        '200':
+          description: Eligible approvers list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  claim_amount:
+                    type: number
+                  required_authority:
+                    type: string
+                  eligible_approvers:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        user_id:
+                          type: string
+                        name:
+                          type: string
+                        designation:
+                          type: string
+                        authority_limit:
+                          type: number
+
+  /claims/death/{claim_id}/approval-details:
+    get:
+      tags:
+        - Death Claims - Core
+      summary: Get complete claim details for approval
+      description: Approver dashboard API with all claim information
+      operationId: getApprovalDetails
+      parameters:
+        - $ref: '#/components/parameters/ClaimIdPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/ClaimApprovalDetails'
+
+  /claims/death/{claim_id}/red-flags:
+    get:
+      tags:
+        - Death Claims - Core
+      summary: Get AI/ML fraud detection red flags
+      description: AI-powered fraud detection indicators for approver review
+      operationId: getFraudRedFlags
+      parameters:
+        - $ref: '#/components/parameters/ClaimIdPath'
+      responses:
+        '200':
+          description: Red flags list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  claim_id:
+                    type: string
+                  risk_score:
+                    type: integer
+                    minimum: 0
+                    maximum: 100
+                  red_flags:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        flag_type:
+                          type: string
+                        severity:
+                          type: string
+                          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+                        description:
+                          type: string
+
+  /claims/death/{claim_id}/approve:
+    post:
+      tags:
+        - Death Claims - Core
+      summary: Approve death claim
+      operationId: approveDeathClaim
+      parameters:
+        - $ref: '#/components/parameters/ClaimIdPath'
+      requestBody:
+        $ref: '#/components/requestBodies/ApprovalDecision'
+      responses:
+        '200':
+          $ref: '#/components/responses/ClaimApproved'
+        '403':
+          description: Insufficient authority
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /claims/death/{claim_id}/reject:
+    post:
+      tags:
+        - Death Claims - Core
+      summary: Reject death claim
+      operationId: rejectDeathClaim
+      parameters:
+        - $ref: '#/components/parameters/ClaimIdPath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - rejection_reason
+                - detailed_justification
+              properties:
+                rejection_reason:
+                  type: string
+                  enum:
+                    - FRAUD_DETECTED
+                    - MATERIAL_SUPPRESSION
+                    - POLICY_INVALID
+                    - INCOMPLETE_DOCUMENTS
+                    - INVESTIGATION_ADVERSE
+                    - OTHER
+                detailed_justification:
+                  type: string
+                  maxLength: 2000
+                appeal_rights_communicated:
+                  type: boolean
+                  default: true
+      responses:
+        '200':
+          description: Claim rejected with appeal rights
+
+  /claims/death/{claim_id}/validate-bank-account:
+    post:
+      tags:
+        - Death Claims - Core
+        - Banking & Payment
+      summary: Validate bank account before disbursement
+      operationId: validateBankAccountForClaim
+      parameters:
+        - $ref: '#/components/parameters/ClaimIdPath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                validation_method:
+                  type: string
+                  enum: [CBS_API, PFMS_API, PENNY_DROP]
+                  default: CBS_API
+      responses:
+        '200':
+          description: Bank account validated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankValidationResponse'
+        '422':
+          description: Validation failed
+
+  /claims/death/{claim_id}/disburse:
+    post:
+      tags:
+        - Death Claims - Core
+        - Banking & Payment
+      summary: Initiate payment disbursement
+      operationId: disburseDeathClaim
+      parameters:
+        - $ref: '#/components/parameters/ClaimIdPath'
+      requestBody:
+        $ref: '#/components/requestBodies/DisbursementRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/DisbursementInitiated'
+
+  /claims/death/{claim_id}/close:
+    post:
+      tags:
+        - Death Claims - Core
+      summary: Close claim after successful payment
+      operationId: closeDeathClaim
+      parameters:
+        - $ref: '#/components/parameters/ClaimIdPath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                closure_reason:
+                  type: string
+                  enum: [PAYMENT_COMPLETED, CLAIM_WITHDRAWN, APPEAL_REJECTED]
+                archival_required:
+                  type: boolean
+                  default: true
+      responses:
+        '200':
+          description: Claim closed successfully
+
+  /claims/death/{claim_id}/cancel:
+    post:
+      tags:
+        - Death Claims - Core
+      summary: Cancel claim (claimant withdrawal)
+      operationId: cancelDeathClaim
+      parameters:
+        - $ref: '#/components/parameters/ClaimIdPath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - cancellation_reason
+                - requested_by
+              properties:
+                cancellation_reason:
+                  type: string
+                requested_by:
+                  type: string
+                can_resubmit:
+                  type: boolean
+                  default: true
+      responses:
+        '200':
+          description: Claim cancelled
+
+  /claims/death/{claim_id}/return:
+    post:
+      tags:
+        - Death Claims - Core
+      summary: Return claim to claimant (documents not received)
+      operationId: returnDeathClaim
+      parameters:
+        - $ref: '#/components/parameters/ClaimIdPath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - return_reason
+              properties:
+                return_reason:
+                  type: string
+                  enum: [DOCUMENTS_NOT_RECEIVED, SLA_EXPIRED]
+                resubmit_instructions:
+                  type: string
+      responses:
+        '200':
+          description: Claim returned
+
+  /claims/death/{claim_id}/request-feedback:
+    post:
+      tags:
+        - Death Claims - Core
+        - Notifications
+      summary: Request customer feedback after claim closure
+      operationId: requestClaimFeedback
+      parameters:
+        - $ref: '#/components/parameters/ClaimIdPath'
+      responses:
+        '200':
+          description: Feedback request sent
+
+  # ========================================
+  # DEATH CLAIMS - INVESTIGATION WORKFLOW
+  # ========================================
+
+  /claims/death/{claim_id}/investigation/assign-officer:
+    post:
+      tags:
+        - Death Claims - Investigation
+      summary: Assign investigation officer
+      description: |
+        Auto-assign or manually assign investigation officer.
+        **SLA**: 21 days for investigation report (BR-CLM-DC-002)
+      operationId: assignInvestigationOfficer
+      parameters:
+        - $ref: '#/components/parameters/ClaimIdPath'
+      requestBody:
+        $ref: '#/components/requestBodies/InvestigationAssignment'
+      responses:
+        '201':
+          $ref: '#/components/responses/InvestigationAssigned'
+
+  /claims/death/pending-investigation:
+    get:
+      tags:
+        - Death Claims - Investigation
+        - Death Claims - Queue Management
+      summary: Get list of claims pending investigation assignment
+      operationId: getPendingInvestigationClaims
+      parameters:
+        - name: jurisdiction
+          in: query
+          schema:
+            type: string
+        - name: sla_status
+          in: query
+          schema:
+            type: string
+            enum: [GREEN, YELLOW, RED]
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Pending investigation claims list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  claims:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ClaimSummary'
+                  pagination:
+                    $ref: '#/components/schemas/PaginationMetadata'
+
+  /claims/death/{claim_id}/investigation/{investigation_id}/details:
+    get:
+      tags:
+        - Death Claims - Investigation
+      summary: Get investigation assignment details
+      operationId: getInvestigationDetails
+      parameters:
+        - $ref: '#/components/parameters/ClaimIdPath'
+        - name: investigation_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          $ref: '#/components/responses/InvestigationDetails'
+
+  /claims/death/{claim_id}/investigation/{investigation_id}/progress-update:
+    post:
+      tags:
+        - Death Claims - Investigation
+      summary: Submit investigation progress update (heartbeat)
+      description: Officer submits progress to maintain workflow heartbeat
+      operationId: submitInvestigationProgress
+      parameters:
+        - $ref: '#/components/parameters/ClaimIdPath'
+        - name: investigation_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        $ref: '#/components/requestBodies/InvestigationProgress'
+      responses:
+        '200':
+          description: Progress recorded
+
+  /claims/death/{claim_id}/investigation/{investigation_id}/submit-report:
+    post:
+      tags:
+        - Death Claims - Investigation
+      summary: Submit final investigation report
+      description: |
+        Submit investigation report with outcome: CLEAR/SUSPECT/FRAUD
+      operationId: submitInvestigationReport
+      parameters:
+        - $ref: '#/components/parameters/ClaimIdPath'
+        - name: investigation_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        $ref: '#/components/requestBodies/InvestigationReport'
+      responses:
+        '200':
+          $ref: '#/components/responses/InvestigationReportSubmitted'
+
+  /claims/death/{claim_id}/investigation/{investigation_id}/review:
+    post:
+      tags:
+        - Death Claims - Investigation
+      summary: Review investigation report
+      description: |
+        Reviewer evaluates investigation report within 5-day SLA
+      operationId: reviewInvestigationReport
+      parameters:
+        - $ref: '#/components/parameters/ClaimIdPath'
+        - name: investigation_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - review_decision
+                - reviewer_remarks
+              properties:
+                review_decision:
+                  type: string
+                  enum: [ACCEPT, REINVESTIGATE, ESCALATE]
+                reviewer_remarks:
+                  type: string
+                reinvestigation_reason:
+                  type: string
+      responses:
+        '200':
+          description: Review decision recorded
+
+  /claims/death/{id}/investigation/trigger-reinvestigation:
+    post:
+      tags:
+        - Death Claims - Investigation
+      summary: Trigger reinvestigation (max 2 times per BR-CLM-DC-013)
+      operationId: triggerReinvestigation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - reinvestigation_reason
+              properties:
+                reinvestigation_reason:
+                  type: string
+                specific_focus_areas:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Reinvestigation triggered
+
+  /claims/death/{id}/investigation/escalate-sla-breach:
+    post:
+      tags:
+        - Death Claims - Investigation
+      summary: Escalate investigation due to SLA breach
+      operationId: escalateInvestigationSLA
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Escalation initiated
+
+  /claims/death/{id}/manual-review/assign:
+    post:
+      tags:
+        - Death Claims - Investigation
+      summary: Assign claim for manual review (SUSPECT outcome)
+      operationId: assignManualReview
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reviewer_id:
+                  type: string
+                priority:
+                  type: string
+                  enum: [LOW, MEDIUM, HIGH, URGENT]
+      responses:
+        '200':
+          description: Manual review assigned
+
+  /claims/death/{id}/reject-fraud:
+    post:
+      tags:
+        - Death Claims - Investigation
+      summary: Reject claim based on fraud investigation
+      operationId: rejectClaimForFraud
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - fraud_evidence
+                - investigation_report_id
+              properties:
+                fraud_evidence:
+                  type: string
+                investigation_report_id:
+                  type: string
+                legal_action_required:
+                  type: boolean
+      responses:
+        '200':
+          description: Claim rejected for fraud
+
+  # ========================================
+  # DEATH CLAIMS - APPEAL WORKFLOW
+  # ========================================
+
+  /claims/death/{claim_id}/appeal-eligibility:
+    get:
+      tags:
+        - Death Claims - Appeal
+      summary: Check appeal eligibility (90-day window)
+      operationId: checkAppealEligibility
+      parameters:
+        - $ref: '#/components/parameters/ClaimIdPath'
+      responses:
+        '200':
+          description: Appeal eligibility status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  eligible:
+                    type: boolean
+                  rejection_date:
+                    type: string
+                    format: date
+                  appeal_deadline:
+                    type: string
+                    format: date
+                  days_remaining:
+                    type: integer
+                  condonation_required:
+                    type: boolean
+
+  /claims/death/{claim_id}/appellate-authority:
+    get:
+      tags:
+        - Death Claims - Appeal
+      summary: Get appellate authority details
+      description: Returns next higher officer in approval hierarchy
+      operationId: getAppellateAuthority
+      parameters:
+        - $ref: '#/components/parameters/ClaimIdPath'
+      responses:
+        '200':
+          description: Appellate authority details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  authority_name:
+                    type: string
+                  designation:
+                    type: string
+                  jurisdiction:
+                    type: string
+
+  /claims/death/{claim_id}/appeal:
+    post:
+      tags:
+        - Death Claims - Appeal
+      summary: Submit appeal for rejected claim
+      description: |
+        Submit appeal within 90-day window (BR-CLM-DC-005).
+        Appeal SLA: 45 days for decision (BR-CLM-DC-006)
+      operationId: submitAppeal
+      parameters:
+        - $ref: '#/components/parameters/ClaimIdPath'
+      requestBody:
+        $ref: '#/components/requestBodies/AppealSubmission'
+      responses:
+        '201':
+          description: Appeal submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  appeal_id:
+                    type: string
+                  appeal_number:
+                    type: string
+                  status:
+                    type: string
+                  appellate_authority:
+                    type: string
+                  appeal_deadline:
+                    type: string
+                    format: date-time
+        '400':
+          description: Appeal window expired or ineligible
+
+  /claims/death/{claim_id}/appeal/{appeal_id}/decision:
+    post:
+      tags:
+        - Death Claims - Appeal
+      summary: Record appellate authority decision
+      operationId: recordAppealDecision
+      parameters:
+        - $ref: '#/components/parameters/ClaimIdPath'
+        - name: appeal_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - decision
+                - reasoned_order
+              properties:
+                decision:
+                  type: string
+                  enum: [APPEAL_ACCEPTED, APPEAL_REJECTED, PARTIAL_ACCEPTANCE]
+                reasoned_order:
+                  type: string
+                  maxLength: 5000
+                revised_claim_amount:
+                  type: number
+      responses:
+        '200':
+          description: Appeal decision recorded
+
+  # ========================================
+  # DEATH CLAIMS - QUEUE MANAGEMENT
+  # ========================================
+
+  /claims/death/approval-queue:
+    get:
+      tags:
+        - Death Claims - Queue Management
+      summary: Get claims pending approval (approver dashboard)
+      operationId: getApprovalQueue
+      parameters:
+        - name: claim_amount_min
+          in: query
+          schema:
+            type: number
+        - name: claim_amount_max
+          in: query
+          schema:
+            type: number
+        - name: sla_status
+          in: query
+          schema:
+            type: string
+            enum: [GREEN, YELLOW, RED]
+        - name: investigation_status
+          in: query
+          schema:
+            type: string
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Approval queue with claims
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  claims:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ClaimSummary'
+                  pagination:
+                    $ref: '#/components/schemas/PaginationMetadata'
+                  queue_statistics:
+                    type: object
+                    properties:
+                      total_claims:
+                        type: integer
+                      total_amount:
+                        type: number
+                      green_sla:
+                        type: integer
+                      yellow_sla:
+                        type: integer
+                      red_sla:
+                        type: integer
+
+  /claims/death/payment-queue:
+    get:
+      tags:
+        - Death Claims - Queue Management
+      summary: Get approved claims pending payment
+      operationId: getPaymentQueue
+      parameters:
+        - name: payment_mode
+          in: query
+          schema:
+            type: string
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Payment queue
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  claims:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ClaimSummary'
+                  pagination:
+                    $ref: '#/components/schemas/PaginationMetadata'
+
+  # ========================================
+  # MATURITY CLAIMS
+  # ========================================
+
+  /claims/maturity/send-intimation-batch:
+    post:
+      tags:
+        - Maturity Claims
+      summary: Send maturity intimation batch (60 days before maturity)
+      description: |
+        Scheduled job API to send intimation for policies maturing in 60 days.
+        **Related**: FR-CLM-MC-002, BR-CLM-MC-002
+      operationId: sendMaturityIntimationBatch
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                maturity_date_from:
+                  type: string
+                  format: date
+                maturity_date_to:
+                  type: string
+                  format: date
+                channels:
+                  type: array
+                  items:
+                    type: string
+                    enum: [SMS, EMAIL, WHATSAPP]
+      responses:
+        '200':
+          description: Batch intimation sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_policies:
+                    type: integer
+                  intimations_sent:
+                    type: integer
+                  failed:
+                    type: integer
+
+  /claims/maturity/generate-due-report:
+    post:
+      tags:
+        - Maturity Claims
+        - Reporting & Analytics
+      summary: Generate maturity due report
+      description: Monthly report of policies due for maturity
+      operationId: generateMaturityDueReport
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - report_month
+                - report_year
+              properties:
+                report_month:
+                  type: integer
+                  minimum: 1
+                  maximum: 12
+                report_year:
+                  type: integer
+      responses:
+        '200':
+          description: Report generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  report_id:
+                    type: string
+                  report_url:
+                    type: string
+                  total_policies:
+                    type: integer
+                  total_amount:
+                    type: number
+
+  /claims/maturity/pre-fill-data:
+    get:
+      tags:
+        - Maturity Claims
+      summary: Get pre-filled data for maturity claim form
+      description: |
+        Pre-populate maturity claim form with policy and customer data.
+        Uses token from intimation email/SMS.
+      operationId: getMaturityPreFillData
+      parameters:
+        - name: policy_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Pre-filled data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  policy_id:
+                    type: string
+                  customer_name:
+                    type: string
+                  maturity_date:
+                    type: string
+                    format: date
+                  maturity_amount:
+                    type: number
+                  registered_mobile:
+                    type: string
+                  registered_email:
+                    type: string
+                  bank_details_on_record:
+                    $ref: '#/components/schemas/BankDetails'
+
+  /claims/maturity/submit:
+    post:
+      tags:
+        - Maturity Claims
+      summary: Submit maturity claim (online/offline)
+      description: |
+        Register maturity claim. SLA: 7 days (BR-CLM-MC-001)
+      operationId: submitMaturityClaim
+      requestBody:
+        $ref: '#/components/requestBodies/MaturityClaimSubmission'
+      responses:
+        '201':
+          description: Maturity claim submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaturityClaimRegistrationResponse'
+
+  /claims/maturity/{claim_id}/validate-documents:
+    post:
+      tags:
+        - Maturity Claims
+      summary: Validate uploaded documents against checklist
+      operationId: validateMaturityDocuments
+      parameters:
+        - name: claim_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Documents validated
+
+  /claims/maturity/{claim_id}/extract-ocr-data:
+    post:
+      tags:
+        - Maturity Claims
+        - Document Management
+      summary: Extract data from documents using OCR
+      description: Auto-populate claim form fields from scanned documents
+      operationId: extractOCRData
+      parameters:
+        - name: claim_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                document_ids:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: OCR data extracted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  extracted_data:
+                    type: object
+                  confidence_score:
+                    type: number
+                  fields_extracted:
+                    type: array
+                    items:
+                      type: string
+
+  /claims/maturity/{claim_id}/qc-verify:
+    post:
+      tags:
+        - Maturity Claims
+      summary: QC supervisor verification of OCR data
+      operationId: qcVerifyMaturityClaim
+      parameters:
+        - name: claim_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - qc_status
+              properties:
+                qc_status:
+                  type: string
+                  enum: [APPROVED, REJECTED, CORRECTIONS_REQUIRED]
+                corrections:
+                  type: object
+                qc_remarks:
+                  type: string
+      responses:
+        '200':
+          description: QC verification completed
+
+  /claims/maturity/{claim_id}/validate-bank:
+    post:
+      tags:
+        - Maturity Claims
+        - Banking & Payment
+      summary: Validate bank account for maturity claim
+      operationId: validateMaturityBankAccount
+      parameters:
+        - name: claim_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          $ref: '#/components/responses/BankAccountValidated'
+
+  /claims/maturity/{claim_id}/approval-details:
+    get:
+      tags:
+        - Maturity Claims
+      summary: Get maturity claim details for approval
+      operationId: getMaturityApprovalDetails
+      parameters:
+        - name: claim_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          $ref: '#/components/responses/ClaimApprovalDetails'
+
+  /claims/maturity/{claim_id}/approve:
+    post:
+      tags:
+        - Maturity Claims
+      summary: Approve maturity claim
+      operationId: approveMaturityClaim
+      parameters:
+        - name: claim_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        $ref: '#/components/requestBodies/ApprovalDecision'
+      responses:
+        '200':
+          $ref: '#/components/responses/ClaimApproved'
+
+  /claims/maturity/{claim_id}/disburse:
+    post:
+      tags:
+        - Maturity Claims
+        - Banking & Payment
+      summary: Disburse maturity claim payment
+      operationId: disburseMaturityClaim
+      parameters:
+        - name: claim_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        $ref: '#/components/requestBodies/DisbursementRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/DisbursementInitiated'
+
+  /claims/maturity/{claim_id}/generate-voucher:
+    post:
+      tags:
+        - Maturity Claims
+      summary: Generate payment voucher
+      operationId: generateMaturityVoucher
+      parameters:
+        - name: claim_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Voucher generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  voucher_number:
+                    type: string
+                  voucher_date:
+                    type: string
+                    format: date
+                  voucher_url:
+                    type: string
+
+  /claims/maturity/{claim_id}/send-document-reminder:
+    post:
+      tags:
+        - Maturity Claims
+        - Notifications
+      summary: Send document reminder for maturity claim
+      operationId: sendMaturityDocumentReminder
+      parameters:
+        - name: claim_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Reminder sent
+
+  /claims/maturity/{claim_id}/close:
+    post:
+      tags:
+        - Maturity Claims
+      summary: Close maturity claim
+      operationId: closeMaturityClaim
+      parameters:
+        - name: claim_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Claim closed
+
+  /claims/maturity/{claim_id}/request-feedback:
+    post:
+      tags:
+        - Maturity Claims
+        - Notifications
+      summary: Request customer feedback
+      operationId: requestMaturityFeedback
+      parameters:
+        - name: claim_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Feedback request sent
+
+  # ========================================
+  # SURVIVAL BENEFIT CLAIMS
+  # ========================================
+
+  /claims/survival-benefit/submit:
+    post:
+      tags:
+        - Survival Benefit Claims
+      summary: Submit survival benefit claim
+      description: |
+        Submit SB claim with optional DigiLocker integration.
+        SLA: 7 days (BR-CLM-SB-001)
+      operationId: submitSurvivalBenefitClaim
+      requestBody:
+        $ref: '#/components/requestBodies/SurvivalBenefitSubmission'
+      responses:
+        '201':
+          description: SB claim submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SurvivalBenefitClaimRegistrationResponse'
+
+  /claims/survival-benefit/{id}/validate-eligibility:
+    post:
+      tags:
+        - Survival Benefit Claims
+      summary: Validate SB claim eligibility
+      operationId: validateSBEligibility
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Eligibility validated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  eligible:
+                    type: boolean
+                  sb_due_date:
+                    type: string
+                    format: date
+                  sb_amount:
+                    type: number
+                  eligibility_reasons:
+                    type: array
+                    items:
+                      type: string
+
+  # ========================================
+  # POLICY SERVICES
+  # ========================================
+
+  /policies/{id}/details:
+    get:
+      tags:
+        - Policy Services
+      summary: Get complete policy details
+      operationId: getPolicyDetails
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Policy details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyDetails'
+
+  /policies/{policy_id}/claim-eligibility:
+    get:
+      tags:
+        - Policy Services
+      summary: Check policy eligibility for claim
+      operationId: checkPolicyClaimEligibility
+      parameters:
+        - name: policy_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: claim_type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [DEATH, MATURITY, SURVIVAL_BENEFIT, FREELOOK]
+      responses:
+        '200':
+          description: Eligibility status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyEligibilityResponse'
+
+  /policies/{id}/benefit-calculation:
+    get:
+      tags:
+        - Policy Services
+      summary: Get benefit calculation inputs from policy
+      description: Returns SA, bonuses, loans, premiums for claim calculation
+      operationId: getPolicyBenefitCalculation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Calculation inputs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sum_assured:
+                    type: number
+                  reversionary_bonus:
+                    type: number
+                  terminal_bonus:
+                    type: number
+                  outstanding_loan:
+                    type: number
+                  unpaid_premiums:
+                    type: number
+
+  /policies/{policy_id}/maturity-amount:
+    get:
+      tags:
+        - Policy Services
+      summary: Get maturity amount for policy
+      operationId: getMaturityAmount
+      parameters:
+        - name: policy_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Maturity amount calculated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  maturity_amount:
+                    type: number
+                  maturity_date:
+                    type: string
+                    format: date
+                  breakdown:
+                    $ref: '#/components/schemas/ClaimCalculationBreakdown'
+
+  /bonuses/{policy_id}/accrued:
+    get:
+      tags:
+        - Policy Services
+      summary: Get accrued bonuses for policy
+      operationId: getAccruedBonuses
+      parameters:
+        - name: policy_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Accrued bonuses
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reversionary_bonus:
+                    type: number
+                  terminal_bonus:
+                    type: number
+                  total_bonus:
+                    type: number
+
+  /loans/{policy_id}/outstanding:
+    get:
+      tags:
+        - Policy Services
+      summary: Get outstanding loan amount
+      operationId: getOutstandingLoan
+      parameters:
+        - name: policy_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Outstanding loan
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  outstanding_principal:
+                    type: number
+                  accrued_interest:
+                    type: number
+                  total_outstanding:
+                    type: number
+
+  /premiums/{policy_id}/unpaid:
+    get:
+      tags:
+        - Policy Services
+      summary: Get unpaid premium amount
+      operationId: getUnpaidPremiums
+      parameters:
+        - name: policy_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Unpaid premiums
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_unpaid:
+                    type: number
+                  premiums_due:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        due_date:
+                          type: string
+                          format: date
+                        amount:
+                          type: number
+
+  /policies/{policy_id}/freelook-refund-calculation:
+    post:
+      tags:
+        - Policy Services
+      summary: Calculate free look refund amount
+      operationId: calculateFreeLookRefund
+      parameters:
+        - name: policy_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Free look refund calculated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  premium_paid:
+                    type: number
+                  deductions:
+                    type: object
+                    properties:
+                      stamp_duty:
+                        type: number
+                      medical_exam_charges:
+                        type: number
+                      proportionate_risk_premium:
+                        type: number
+                      total:
+                        type: number
+                  refund_amount:
+                    type: number
+
+  # ========================================
+  # BANKING & PAYMENT SERVICES
+  # ========================================
+
+  /banking/validate-account:
+    post:
+      tags:
+        - Banking & Payment
+      summary: Validate bank account via CBS/PFMS
+      operationId: validateBankAccount
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - account_number
+                - ifsc_code
+                - account_holder_name
+              properties:
+                account_number:
+                  type: string
+                ifsc_code:
+                  type: string
+                account_holder_name:
+                  type: string
+                validation_method:
+                  type: string
+                  enum: [CBS_API, PFMS_API, PENNY_DROP]
+      responses:
+        '200':
+          $ref: '#/components/responses/BankAccountValidated'
+
+  /banking/validate-account-cbs:
+    post:
+      tags:
+        - Banking & Payment
+        - Integration Services
+      summary: Validate via CBS API (Core Banking System)
+      operationId: validateViaCBS
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BankValidationRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/BankAccountValidated'
+
+  /banking/validate-account-pfms:
+    post:
+      tags:
+        - Banking & Payment
+        - Integration Services
+      summary: Validate via PFMS API (Public Financial Management System)
+      operationId: validateViaPFMS
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BankValidationRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/BankAccountValidated'
+
+  /banking/penny-drop:
+    post:
+      tags:
+        - Banking & Payment
+      summary: Perform penny drop test (1 rupee transfer)
+      operationId: performPennyDrop
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BankValidationRequest'
+      responses:
+        '200':
+          description: Penny drop test successful
+
+  /banking/neft-transfer:
+    post:
+      tags:
+        - Banking & Payment
+      summary: Initiate NEFT transfer
+      operationId: initiateNEFTTransfer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - account_number
+                - ifsc_code
+                - amount
+                - beneficiary_name
+              properties:
+                account_number:
+                  type: string
+                ifsc_code:
+                  type: string
+                amount:
+                  type: number
+                beneficiary_name:
+                  type: string
+                reference_id:
+                  type: string
+                remarks:
+                  type: string
+      responses:
+        '200':
+          description: NEFT transfer initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  payment_reference:
+                    type: string
+                  utr_number:
+                    type: string
+                  status:
+                    type: string
+                    enum: [SUCCESS, PENDING, FAILED]
+                  initiated_at:
+                    type: string
+                    format: date-time
+
+  /banking/payment-reconciliation:
+    post:
+      tags:
+        - Banking & Payment
+      summary: Daily payment reconciliation
+      description: Batch reconciliation of all payments
+      operationId: reconcilePayments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reconciliation_date:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: Reconciliation completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_payments:
+                    type: integer
+                  reconciled:
+                    type: integer
+                  pending:
+                    type: integer
+                  failed:
+                    type: integer
+
+  /payments/{payment_id}/status:
+    get:
+      tags:
+        - Banking & Payment
+      summary: Get real-time payment status
+      operationId: getPaymentStatus
+      parameters:
+        - name: payment_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Payment status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentStatusResponse'
+
+  /webhooks/banking/payment-confirmation:
+    post:
+      tags:
+        - Banking & Payment
+        - Integration Services
+      summary: Payment confirmation webhook from banking gateway
+      operationId: handlePaymentConfirmationWebhook
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - payment_id
+                - status
+                - transaction_id
+              properties:
+                payment_id:
+                  type: string
+                status:
+                  type: string
+                  enum: [SUCCESS, FAILED, PENDING]
+                transaction_id:
+                  type: string
+                amount:
+                  type: number
+                timestamp:
+                  type: string
+                  format: date-time
+                failure_reason:
+                  type: string
+      responses:
+        '200':
+          description: Webhook acknowledged
+
+  # ========================================
+  # DOCUMENT MANAGEMENT
+  # ========================================
+
+  /virus-scan/scan:
+    post:
+      tags:
+        - Document Management
+      summary: Scan uploaded document for viruses
+      operationId: scanDocumentForVirus
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - document_id
+              properties:
+                document_id:
+                  type: string
+      responses:
+        '200':
+          description: Scan completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scan_status:
+                    type: string
+                    enum: [CLEAN, INFECTED, SUSPICIOUS]
+                  threats_found:
+                    type: array
+                    items:
+                      type: string
+
+  /ecms/upload:
+    post:
+      tags:
+        - Document Management
+        - Integration Services
+      summary: Upload document to ECMS
+      description: Enterprise Content Management System upload
+      operationId: uploadToECMS
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+                - metadata
+              properties:
+                file:
+                  type: string
+                  format: binary
+                metadata:
+                  type: object
+      responses:
+        '201':
+          description: Document uploaded to ECMS
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ecms_reference_id:
+                    type: string
+                  document_url:
+                    type: string
+
+  /ecms/archive-claim:
+    post:
+      tags:
+        - Document Management
+        - Integration Services
+      summary: Archive complete claim dossier
+      operationId: archiveClaimDossier
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - claim_id
+              properties:
+                claim_id:
+                  type: string
+                archival_policy:
+                  type: string
+                  enum: [LONG_TERM, PERMANENT]
+      responses:
+        '200':
+          description: Claim archived
+
+  /documents/generate-sanction-letter:
+    post:
+      tags:
+        - Document Management
+      summary: Auto-generate claim sanction letter
+      operationId: generateSanctionLetter
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - claim_id
+              properties:
+                claim_id:
+                  type: string
+      responses:
+        '200':
+          description: Sanction letter generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  letter_id:
+                    type: string
+                  letter_url:
+                    type: string
+
+  /documents/generate-rejection-letter:
+    post:
+      tags:
+        - Document Management
+      summary: Auto-generate claim rejection letter with appeal rights
+      operationId: generateRejectionLetter
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - claim_id
+                - rejection_reason
+              properties:
+                claim_id:
+                  type: string
+                rejection_reason:
+                  type: string
+      responses:
+        '200':
+          description: Rejection letter generated
+
+  # ========================================
+  # LOOKUP & REFERENCE DATA
+  # ========================================
+
+  /lookup/claimant-relationships:
+    get:
+      tags:
+        - Lookup & Reference Data
+      summary: Get list of valid claimant relationships
+      operationId: getClaimantRelationships
+      responses:
+        '200':
+          description: Relationships list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  relationships:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code:
+                          type: string
+                        description:
+                          type: string
+
+  /lookup/death-types:
+    get:
+      tags:
+        - Lookup & Reference Data
+      summary: Get list of death types
+      operationId: getDeathTypes
+      responses:
+        '200':
+          description: Death types list
+
+  /lookup/document-types:
+    get:
+      tags:
+        - Lookup & Reference Data
+      summary: Get document types for claim type
+      operationId: getDocumentTypes
+      parameters:
+        - name: claim_type
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: death_type
+          in: query
+          schema:
+            type: string
+        - name: nomination_status
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Document types
+
+  /lookup/rejection-reasons:
+    get:
+      tags:
+        - Lookup & Reference Data
+      summary: Get list of claim rejection reasons
+      operationId: getRejectionReasons
+      parameters:
+        - name: claim_type
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Rejection reasons
+
+  /lookup/investigation-officers:
+    get:
+      tags:
+        - Lookup & Reference Data
+      summary: Get investigation officers by jurisdiction
+      operationId: getInvestigationOfficers
+      parameters:
+        - name: jurisdiction
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: rank
+          in: query
+          schema:
+            type: string
+        - name: available_only
+          in: query
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '200':
+          description: Officers list
+
+  /lookup/approvers:
+    get:
+      tags:
+        - Lookup & Reference Data
+      summary: Get approvers by claim amount and location
+      operationId: getApproversList
+      parameters:
+        - name: claim_amount
+          in: query
+          required: true
+          schema:
+            type: number
+        - name: location
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Approvers list
+
+  /lookup/payment-modes:
+    get:
+      tags:
+        - Lookup & Reference Data
+      summary: Get available payment modes
+      operationId: getPaymentModes
+      responses:
+        '200':
+          description: Payment modes list
+
+  /approvers/financial-limits:
+    get:
+      tags:
+        - Lookup & Reference Data
+      summary: Get approval hierarchy and financial limits
+      operationId: getApprovalHierarchy
+      responses:
+        '200':
+          description: Approval hierarchy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hierarchy:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        designation:
+                          type: string
+                        min_amount:
+                          type: number
+                        max_amount:
+                          type: number
+
+  # ========================================
+  # VALIDATION SERVICES
+  # ========================================
+
+  /validate/pan:
+    post:
+      tags:
+        - Validation Services
+      summary: Validate PAN number
+      operationId: validatePAN
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - pan_number
+              properties:
+                pan_number:
+                  type: string
+      responses:
+        '200':
+          description: PAN validated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                  pan_number:
+                    type: string
+                  name_on_pan:
+                    type: string
+
+  /validate/bank-account:
+    post:
+      tags:
+        - Validation Services
+        - Banking & Payment
+      summary: Validate bank account
+      operationId: validateBankAccountService
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BankValidationRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/BankAccountValidated'
+
+  /validate/death-date:
+    post:
+      tags:
+        - Validation Services
+      summary: Validate death date against policy dates
+      operationId: validateDeathDate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - policy_id
+                - death_date
+              properties:
+                policy_id:
+                  type: string
+                death_date:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: Death date validated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                  investigation_required:
+                    type: boolean
+                  validation_messages:
+                    type: array
+                    items:
+                      type: string
+
+  /validate/ifsc/{ifsc_code}:
+    get:
+      tags:
+        - Validation Services
+      summary: Validate IFSC code and get bank details
+      operationId: validateIFSC
+      parameters:
+        - name: ifsc_code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: IFSC validated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                  ifsc_code:
+                    type: string
+                  bank_name:
+                    type: string
+                  branch_name:
+                    type: string
+                  address:
+                    type: string
+
+  /forms/death-claim/fields:
+    get:
+      tags:
+        - Validation Services
+      summary: Get dynamic form fields based on death type
+      operationId: getDynamicFormFields
+      parameters:
+        - name: death_type
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Dynamic form fields
+
+  # ========================================
+  # CLAIM STATUS & TRACKING
+  # ========================================
+
+  /claims/{claim_id}/status:
+    get:
+      tags:
+        - Death Claims - Core
+        - Maturity Claims
+        - Survival Benefit Claims
+      summary: Get claim status (Public API with OTP auth)
+      description: |
+        Public API for customers to track claim status using OTP authentication.
+      operationId: getClaimStatus
+      parameters:
+        - name: claim_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Claim status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimStatusResponse'
+
+  /claims/{claim_id}/sla-countdown:
+    get:
+      tags:
+        - Death Claims - Core
+        - Maturity Claims
+      summary: Get SLA countdown (real-time)
+      operationId: getSLACountdown
+      parameters:
+        - name: claim_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: SLA countdown
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sla_type:
+                    type: string
+                  total_days:
+                    type: integer
+                  elapsed_days:
+                    type: integer
+                  remaining_days:
+                    type: integer
+                  deadline:
+                    type: string
+                    format: date-time
+                  sla_status:
+                    type: string
+                    enum: [GREEN, YELLOW, RED]
+
+  /claims/{claim_id}/payment-status:
+    get:
+      tags:
+        - Banking & Payment
+      summary: Get payment status for claim
+      operationId: getClaimPaymentStatus
+      parameters:
+        - name: claim_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Payment status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentStatusResponse'
+
+  /claims/{claim_id}/timeline:
+    get:
+      tags:
+        - Death Claims - Core
+        - Maturity Claims
+      summary: Get complete claim timeline
+      operationId: getClaimTimeline
+      parameters:
+        - name: claim_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Claim timeline
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  claim_id:
+                    type: string
+                  timeline_events:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        timestamp:
+                          type: string
+                          format: date-time
+                        event_type:
+                          type: string
+                        description:
+                          type: string
+                        performed_by:
+                          type: string
+
+  /claims/{claim_id}/communications:
+    get:
+      tags:
+        - Notifications
+      summary: Get communication history for claim
+      operationId: getClaimCommunications
+      parameters:
+        - name: claim_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Communication history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  claim_id:
+                    type: string
+                  communications:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CommunicationRecord'
+
+  /claims/{claim_id}/calculate-penal-interest:
+    post:
+      tags:
+        - Death Claims - Core
+        - Maturity Claims
+      summary: Calculate penal interest for SLA breach
+      operationId: calculatePenalInterest
+      parameters:
+        - name: claim_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - actual_settlement_date
+                - sla_deadline
+              properties:
+                actual_settlement_date:
+                  type: string
+                  format: date
+                sla_deadline:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: Penal interest calculated
+
+  /claims/pending-documents/batch:
+    get:
+      tags:
+        - Document Management
+      summary: Batch API to get claims with pending documents
+      description: Used by scheduled job for sending reminders
+      operationId: getPendingDocumentsBatch
+      parameters:
+        - name: pending_days_min
+          in: query
+          schema:
+            type: integer
+        - name: pending_days_max
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Pending documents batch
+
+  /customers/{customer_id}/claims:
+    get:
+      tags:
+        - Death Claims - Core
+        - Maturity Claims
+      summary: Get all claims for a customer
+      operationId: getCustomerClaims
+      parameters:
+        - name: customer_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Customer claims list
+
+  # ========================================
+  # WORKFLOW MANAGEMENT
+  # ========================================
+
+  /workflows/death-claim/{workflow_id}:
+    get:
+      tags:
+        - Workflow Management
+      summary: Get Temporal workflow instance details
+      operationId: getWorkflowDetails
+      parameters:
+        - name: workflow_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Workflow details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowInstanceDetails'
+
+  /workflows/{workflow_id}/signal:
+    post:
+      tags:
+        - Workflow Management
+      summary: Send signal to workflow (external event)
+      operationId: signalWorkflow
+      parameters:
+        - name: workflow_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - signal_name
+                - signal_data
+              properties:
+                signal_name:
+                  type: string
+                signal_data:
+                  type: object
+      responses:
+        '200':
+          description: Signal sent to workflow
+
+  # ========================================
+  # NOTIFICATIONS
+  # ========================================
+
+  /notifications/send:
+    post:
+      tags:
+        - Notifications
+      summary: Send notification via SMS/Email/WhatsApp
+      operationId: sendNotification
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - notification_type
+                - recipient
+                - channels
+              properties:
+                notification_type:
+                  type: string
+                claim_id:
+                  type: string
+                recipient:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    mobile:
+                      type: string
+                    email:
+                      type: string
+                channels:
+                  type: array
+                  items:
+                    type: string
+                    enum: [SMS, EMAIL, WHATSAPP, PUSH]
+                custom_message:
+                  type: string
+      responses:
+        '200':
+          description: Notification sent
+
+  /notifications/send-batch:
+    post:
+      tags:
+        - Notifications
+      summary: Send batch notifications
+      operationId: sendBatchNotifications
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - notifications
+              properties:
+                notifications:
+                  type: array
+                  items:
+                    type: object
+      responses:
+        '200':
+          description: Batch notifications sent
+
+  /feedback/generate-link:
+    post:
+      tags:
+        - Notifications
+      summary: Generate customer feedback link
+      operationId: generateFeedbackLink
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - claim_id
+              properties:
+                claim_id:
+                  type: string
+                customer_email:
+                  type: string
+      responses:
+        '200':
+          description: Feedback link generated
+
+  # ========================================
+  # AML/CFT
+  # ========================================
+
+  /aml/detect-trigger:
+    post:
+      tags:
+        - AML/CFT
+      summary: Detect AML trigger conditions
+      description: System API to check AML triggers during transactions
+      operationId: detectAMLTrigger
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - transaction_type
+                - transaction_amount
+              properties:
+                transaction_type:
+                  type: string
+                transaction_amount:
+                  type: number
+                policy_id:
+                  type: string
+                customer_id:
+                  type: string
+                payment_mode:
+                  type: string
+      responses:
+        '200':
+          description: AML trigger detection result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  trigger_detected:
+                    type: boolean
+                  trigger_types:
+                    type: array
+                    items:
+                      type: string
+                  risk_level:
+                    type: string
+                    enum: [LOW, MEDIUM, HIGH, CRITICAL]
+
+  /aml/{alert_id}/generate-alert:
+    post:
+      tags:
+        - AML/CFT
+      summary: Generate AML alert
+      operationId: generateAMLAlert
+      parameters:
+        - name: alert_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: AML alert generated
+
+  /aml/{alert_id}/calculate-risk-score:
+    post:
+      tags:
+        - AML/CFT
+      summary: Calculate risk score for alert
+      operationId: calculateAMLRiskScore
+      parameters:
+        - name: alert_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Risk score calculated
+
+  /aml/{alert_id}/details:
+    get:
+      tags:
+        - AML/CFT
+      summary: Get AML alert details
+      operationId: getAMLAlertDetails
+      parameters:
+        - name: alert_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Alert details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AMLAlertDetails'
+
+  /aml/{alert_id}/review:
+    post:
+      tags:
+        - AML/CFT
+      summary: Review AML alert and take action
+      operationId: reviewAMLAlert
+      parameters:
+        - name: alert_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - review_decision
+                - officer_remarks
+              properties:
+                review_decision:
+                  type: string
+                  enum: [CLEAR, FILE_STR, FILE_CTR, BLOCK_TRANSACTION, ESCALATE]
+                officer_remarks:
+                  type: string
+      responses:
+        '200':
+          description: Review decision recorded
+
+  /aml/{alert_id}/file-report:
+    post:
+      tags:
+        - AML/CFT
+      summary: File STR/CTR with regulatory authorities
+      operationId: fileAMLReport
+      parameters:
+        - name: alert_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - report_type
+              properties:
+                report_type:
+                  type: string
+                  enum: [STR, CTR]
+                reporting_agency:
+                  type: string
+                  enum: [FINNET, FINGATE]
+      responses:
+        '200':
+          description: Report filed successfully
+
+  # ========================================
+  # AUDIT & COMPLIANCE
+  # ========================================
+
+  /audit-trail/log:
+    post:
+      tags:
+        - Audit & Compliance
+      summary: Log audit trail entry
+      operationId: logAuditTrail
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - action
+                - performed_by
+              properties:
+                action:
+                  type: string
+                performed_by:
+                  type: string
+                entity_type:
+                  type: string
+                entity_id:
+                  type: string
+                details:
+                  type: object
+      responses:
+        '201':
+          description: Audit entry logged
+
+  /analytics/log-claim-closure:
+    post:
+      tags:
+        - Audit & Compliance
+        - Reporting & Analytics
+      summary: Log claim closure metrics for reporting
+      operationId: logClaimClosureMetrics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - claim_id
+              properties:
+                claim_id:
+                  type: string
+      responses:
+        '200':
+          description: Metrics logged
+
+  /accounting/generate-voucher:
+    post:
+      tags:
+        - Banking & Payment
+      summary: Generate payment voucher for accounting
+      operationId: generatePaymentVoucher
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - claim_id
+                - payment_id
+              properties:
+                claim_id:
+                  type: string
+                payment_id:
+                  type: string
+                voucher_type:
+                  type: string
+      responses:
+        '200':
+          description: Voucher generated
+
+  # ========================================
+  # INTEGRATION SERVICES
+  # ========================================
+
+  /digilocker/fetch-document:
+    post:
+      tags:
+        - Integration Services
+      summary: Fetch document from DigiLocker
+      operationId: fetchDigiLockerDocument
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - authorization_code
+                - document_type
+              properties:
+                authorization_code:
+                  type: string
+                document_type:
+                  type: string
+      responses:
+        '200':
+          description: Document fetched from DigiLocker
+
+  /tax/calculate-tds:
+    post:
+      tags:
+        - Integration Services
+      summary: Calculate TDS on claim amount
+      operationId: calculateTDS
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - claim_amount
+                - pan_available
+              properties:
+                claim_amount:
+                  type: number
+                pan_available:
+                  type: boolean
+                customer_type:
+                  type: string
+      responses:
+        '200':
+          description: TDS calculated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tds_amount:
+                    type: number
+                  tds_percentage:
+                    type: number
+                  net_payable:
+                    type: number
+
+# ========================================
+# COMPONENTS
+# ========================================
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  parameters:
+    ClaimIdPath:
+      name: claim_id
+      in: path
+      required: true
+      schema:
+        type: string
+
+    PageNumber:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+    PageSize:
+      name: page_size
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  requestBodies:
+    DeathClaimRegistration:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/DeathClaimRegistrationRequest'
+
+    DocumentUpload:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            required:
+              - document_type
+              - file
+            properties:
+              document_type:
+                type: string
+              file:
+                type: string
+                format: binary
+              description:
+                type: string
+
+    InvestigationAssignment:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - jurisdiction
+                - auto_assign
+            properties:
+              jurisdiction:
+                type: string
+              auto_assign:
+                type: boolean
+              officer_id:
+                type: string
+
+    InvestigationProgress:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - update_date
+              - progress_percentage
+              - remarks
+            properties:
+              update_date:
+                type: string
+                format: date
+              progress_percentage:
+                type: integer
+                minimum: 0
+                maximum: 100
+              checklist_items_completed:
+                type: array
+                items:
+                  type: string
+              remarks:
+                type: string
+              estimated_completion_date:
+                type: string
+                format: date
+
+    InvestigationReport:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - investigation_outcome
+              - detailed_findings
+              - recommendation
+              - report_document_id
+            properties:
+              investigation_outcome:
+                type: string
+                enum: [CLEAR, SUSPECT, FRAUD]
+              cause_of_death:
+                type: string
+              cause_of_death_verified:
+                type: boolean
+              hospital_records_verified:
+                type: boolean
+              detailed_findings:
+                type: string
+              recommendation:
+                type: string
+                enum: [APPROVE_CLAIM, REJECT_CLAIM, MANUAL_REVIEW]
+              report_document_id:
+                type: string
+
+    AppealSubmission:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - appellant_details
+              - grounds_of_appeal
+            properties:
+              appellant_details:
+                type: object
+              grounds_of_appeal:
+                type: string
+              supporting_documents:
+                type: array
+                items:
+                  type: string
+              condonation_request:
+                type: boolean
+
+    ApprovalDecision:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - approved
+              - approver_remarks
+              - digital_signature
+            properties:
+              approved:
+                type: boolean
+              approver_remarks:
+                type: string
+              digital_signature:
+                type: string
+              rejection_reason:
+                type: string
+
+    DisbursementRequest:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - payment_mode
+            properties:
+              payment_mode:
+                type: string
+                enum: [AUTO_NEFT, POSB_TRANSFER, CHEQUE]
+              payment_remarks:
+                type: string
+
+    MaturityClaimSubmission:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - policy_id
+              - submission_mode
+            properties:
+              policy_id:
+                type: string
+              submission_mode:
+                type: string
+                enum: [ONLINE_PORTAL, ONLINE_MOBILE_APP, OFFLINE_BO_SO]
+              claimant_details:
+                type: object
+              bank_details:
+                $ref: '#/components/schemas/BankDetails'
+
+    SurvivalBenefitSubmission:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - policy_id
+              - digilocker_consent
+            properties:
+              policy_id:
+                type: string
+              digilocker_consent:
+                type: boolean
+              claimant_details:
+                type: object
+              bank_details:
+                $ref: '#/components/schemas/BankDetails'
+
+  responses:
+    DeathClaimRegistered:
+      description: Death claim registered successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              claim_id:
+                type: string
+              status:
+                type: string
+              acknowledgment_number:
+                type: string
+              investigation_required:
+                type: boolean
+              workflow_state:
+                $ref: '#/components/schemas/WorkflowState'
+
+    DocumentUploaded:
+      description: Document uploaded successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              document_id:
+                type: string
+              ecms_reference:
+                type: string
+              uploaded_at:
+                type: string
+                format: date-time
+
+    ClaimCalculated:
+      description: Claim benefit calculated
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ClaimCalculationResponse'
+
+    ClaimApprovalDetails:
+      description: Claim approval details
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              claim_id:
+                type: string
+              policy_details:
+                $ref: '#/components/schemas/PolicyDetails'
+              claimant_details:
+                type: object
+              calculation:
+                $ref: '#/components/schemas/ClaimCalculationResponse'
+              documents:
+                type: array
+                items:
+                  type: object
+              investigation_status:
+                type: string
+
+    ClaimApproved:
+      description: Claim approved successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              claim_id:
+                type: string
+              approval_decision:
+                type: string
+              approver:
+                type: string
+              approved_at:
+                type: string
+                format: date-time
+
+    DisbursementInitiated:
+      description: Payment disbursement initiated
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              payment_id:
+                type: string
+              payment_reference:
+                type: string
+              status:
+                type: string
+              initiated_at:
+                type: string
+                format: date-time
+
+    InvestigationAssigned:
+      description: Investigation officer assigned
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              investigation_id:
+                type: string
+              officer_assigned:
+                type: object
+              assigned_at:
+                type: string
+                format: date-time
+              deadline:
+                type: string
+                format: date-time
+
+    InvestigationDetails:
+      description: Investigation assignment details
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              investigation_id:
+                type: string
+              claim_details:
+                type: object
+              investigation_checklist:
+                type: array
+                items:
+                  type: object
+
+    InvestigationReportSubmitted:
+      description: Investigation report submitted
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              report_id:
+                type: string
+              investigation_outcome:
+                type: string
+              submitted_at:
+                type: string
+                format: date-time
+              review_deadline:
+                type: string
+                format: date-time
+
+    BankAccountValidated:
+      description: Bank account validated
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BankValidationResponse'
+
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    DeathClaimRegistrationRequest:
+      type: object
+      required:
+        - policy_id
+        - death_date
+        - death_place
+        - death_type
+        - claimant_type
+        - claimant_details
+        - bank_details
+      properties:
+        policy_id:
+          type: string
+        death_date:
+          type: string
+          format: date
+        death_place:
+          type: string
+        death_type:
+          type: string
+          enum: [NATURAL, UNNATURAL, ACCIDENTAL, SUICIDE, HOMICIDE]
+        claimant_type:
+          type: string
+          enum: [NOMINEE, LEGAL_HEIR, ASSIGNEE]
+        claimant_details:
+          type: object
+        bank_details:
+          $ref: '#/components/schemas/BankDetails'
+
+    BankDetails:
+      type: object
+      required:
+        - account_number
+        - account_holder_name
+        - ifsc_code
+        - account_type
+      properties:
+        account_number:
+          type: string
+        account_holder_name:
+          type: string
+        ifsc_code:
+          type: string
+        account_type:
+          type: string
+          enum: [SAVINGS, CURRENT, POSB]
+        bank_name:
+          type: string
+        branch_name:
+          type: string
+
+    BankValidationRequest:
+      type: object
+      required:
+        - account_number
+        - ifsc_code
+        - account_holder_name
+      properties:
+        account_number:
+          type: string
+        ifsc_code:
+          type: string
+        account_holder_name:
+          type: string
+
+    BankValidationResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        account_number:
+          type: string
+        account_holder_name:
+          type: string
+        bank_name:
+          type: string
+        validation_method:
+          type: string
+        name_match_percentage:
+          type: number
+
+    WorkflowState:
+      type: object
+      properties:
+        current_step:
+          type: string
+        next_step:
+          type: string
+        sla_deadline:
+          type: string
+          format: date-time
+        days_remaining:
+          type: integer
+        sla_status:
+          type: string
+          enum: [GREEN, YELLOW, RED]
+        allowed_actions:
+          type: array
+          items:
+            type: string
+
+    ClaimCalculationResponse:
+      type: object
+      properties:
+        claim_id:
+          type: string
+        sum_assured:
+          type: number
+        accrued_bonuses:
+          type: number
+        deductions:
+          type: number
+        net_claim_amount:
+          type: number
+        calculation_breakdown:
+          $ref: '#/components/schemas/ClaimCalculationBreakdown'
+
+    ClaimCalculationBreakdown:
+      type: object
+      properties:
+        sum_assured:
+          type: number
+        reversionary_bonus:
+          type: number
+        terminal_bonus:
+          type: number
+        outstanding_loan:
+          type: number
+        unpaid_premiums:
+          type: number
+
+    PolicyDetails:
+      type: object
+      properties:
+        policy_id:
+          type: string
+        policy_number:
+          type: string
+        policy_type:
+          type: string
+        sum_assured:
+          type: number
+        issue_date:
+          type: string
+          format: date
+        maturity_date:
+          type: string
+          format: date
+        policy_status:
+          type: string
+
+    PolicyEligibilityResponse:
+      type: object
+      properties:
+        eligible:
+          type: boolean
+        policy_status:
+          type: string
+        eligibility_checks:
+          type: object
+        ineligibility_reasons:
+          type: array
+          items:
+            type: string
+
+    ClaimStatusResponse:
+      type: object
+      properties:
+        claim_id:
+          type: string
+        status:
+          type: string
+        workflow_state:
+          $ref: '#/components/schemas/WorkflowState'
+        last_updated:
+          type: string
+          format: date-time
+
+    PaymentStatusResponse:
+      type: object
+      properties:
+        payment_id:
+          type: string
+        payment_status:
+          type: string
+        payment_reference:
+          type: string
+        payment_date:
+          type: string
+          format: date-time
+        amount:
+          type: number
+
+    ClaimSummary:
+      type: object
+      properties:
+        claim_id:
+          type: string
+        policy_id:
+          type: string
+        claim_type:
+          type: string
+        claim_amount:
+          type: number
+        status:
+          type: string
+        sla_status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    DocumentChecklist:
+      type: object
+      properties:
+        claim_id:
+          type: string
+        documents:
+          type: array
+          items:
+            type: object
+            properties:
+              document_type:
+                type: string
+              mandatory:
+                type: boolean
+              description:
+                type: string
+              uploaded:
+                type: boolean
+
+    DynamicDocumentChecklist:
+      type: object
+      properties:
+        mandatory_base:
+          type: integer
+        conditional_added:
+          type: integer
+        total_mandatory:
+          type: integer
+        documents:
+          type: array
+          items:
+            type: object
+
+    MaturityClaimRegistrationResponse:
+      type: object
+      properties:
+        claim_id:
+          type: string
+        status:
+          type: string
+        acknowledgment_number:
+          type: string
+        workflow_state:
+          $ref: '#/components/schemas/WorkflowState'
+
+    SurvivalBenefitClaimRegistrationResponse:
+      type: object
+      properties:
+        claim_id:
+          type: string
+        status:
+          type: string
+        digilocker_authorization_required:
+          type: boolean
+        digilocker_auth_url:
+          type: string
+
+    AMLAlertDetails:
+      type: object
+      properties:
+        alert_id:
+          type: string
+        alert_type:
+          type: string
+        risk_level:
+          type: string
+        status:
+          type: string
+        transaction_details:
+          type: object
+
+    WorkflowInstanceDetails:
+      type: object
+      properties:
+        workflow_id:
+          type: string
+        workflow_type:
+          type: string
+        status:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+
+    CommunicationRecord:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        channel:
+          type: string
+        message:
+          type: string
+        status:
+          type: string
+
+    PaginationMetadata:
+      type: object
+      properties:
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total_items:
+          type: integer
+        total_pages:
+          type: integer
+        has_next:
+          type: boolean
+
+    ErrorResponse:
+      type: object
+      required:
+        - error_code
+        - message
+      properties:
+        error_code:
+          type: string
+        message:
+          type: string
+        severity:
+          type: string
+        details:
+          type: object
