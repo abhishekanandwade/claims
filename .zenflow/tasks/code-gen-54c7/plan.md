@@ -608,8 +608,11 @@ go build ./handler/...
 
 ---
 
-### [ ] Task 2.6: Implement Business Rules for Death Claims
+### [x] Task 2.6: Implement Business Rules for Death Claims
+<!-- chat-id: bcb23798-5e5c-48dd-babe-ce166a39a3ea -->
 **Reference**: `.zenflow/tasks/code-gen-54c7/requirements.md` - Business Rules section
+
+**Status**: ✅ Completed
 
 **Steps**:
 Implement business rules in ClaimRepository or ClaimHandler:
@@ -620,10 +623,64 @@ Implement business rules in ClaimRepository or ClaimHandler:
 5. BR-CLM-DC-009: Penal interest calculation
 6. BR-CLM-DC-021: SLA color coding (GREEN/YELLOW/ORANGE/RED)
 
+**Key Deliverables**:
+- Created `core/service/business_rules.go` (565 lines) with comprehensive business logic implementation
+- Implemented 6 core business rule categories with 25+ functions:
+  - **BR-CLM-DC-001: Investigation trigger (3-year rule)**
+    - ShouldTriggerInvestigation(): Checks if death within 3 years of policy issue/revival
+    - Returns investigation requirement status with reason
+  - **BR-CLM-DC-002: Investigation SLA (21 days)**
+    - CalculateInvestigationSLA(): Calculates 21-day SLA from investigation start
+    - IsInvestigationOverdue(): Checks if SLA breached
+    - GetInvestigationDaysRemaining(): Returns days remaining for investigation
+  - **BR-CLM-DC-003: SLA without investigation (15 days)**
+    - CalculateClaimSLAWithoutInvestigation(): 15-day SLA from claim date
+  - **BR-CLM-DC-004: SLA with investigation (45 days)**
+    - CalculateClaimSLAWithInvestigation(): 45-day SLA from claim date
+    - CalculateClaimSLADueDate(): Unified SLA calculation based on investigation flag
+  - **BR-CLM-DC-009: Penal interest calculation (8% p.a.)**
+    - CalculatePenalInterest(): Formula: Claim Amount × 8% × Breach Days / 365
+    - CalculatePenalInterestWithDate(): Date-based penal interest calculation
+    - Returns rounded to 2 decimal places
+  - **BR-CLM-DC-021: SLA color coding**
+    - CalculateSLAStatus(): GREEN (<70%), YELLOW (70-90%), ORANGE (90-100%), RED (>100%)
+    - CalculateSLAStatusForClaim(): Domain object wrapper
+    - CalculateSLAPercentageRemaining(): Returns percentage of SLA remaining
+- **Additional Business Rules Implemented**:
+  - BR-CLM-DC-008: Claim amount calculation (Sum Assured + Bonuses - Loan - Premiums)
+  - BR-CLM-DC-011/013/014/015: Document checklist rules based on death type and nomination
+  - BR-CLM-DC-012: Document completeness validation
+  - BR-CLM-DC-017: Payment mode priority (NEFT > POSB > Cheque)
+  - BR-CLM-DC-019: Communication triggers (document reminder, SLA breach warning)
+  - BR-CLM-DC-022: Approval hierarchy (4 levels based on claim amount)
+  - BR-CLM-DC-023: Reinvestigation limit (max 2)
+- **Helper Functions**:
+  - IsValidDeathType(): Validates death type (NATURAL, ACCIDENTAL, UNNATURAL)
+  - IsValidClaimType(): Validates claim type (DEATH, MATURITY, SURVIVAL_BENEFIT, FREELOOK)
+- Created `core/service/business_rules_test.go` (680+ lines) with comprehensive unit tests:
+  - 45 test cases covering all business rule functions
+  - Tests for edge cases (zero values, nil pointers, boundary conditions)
+  - 100% test pass rate (45/45 tests passing)
+- All business rules properly documented with references to BR-CLM-* identifiers
+- Clean separation of business logic from data access layer
+- Functions are pure and stateless for easy testing
+- Proper error handling and boundary condition checking
+
 **Verification**:
 ```bash
-go test ./... -v -run TestBusinessRules
+go test ./core/service/... -v -count=1
+# PASS: ok  	gitlab.cept.gov.in/pli/claims-api/core/service	0.584s
+# All 45 tests passing
 ```
+
+**Notes**:
+- Business rules implemented in separate service layer for reusability
+- Can be injected into handlers and repositories via dependency injection
+- All calculations use proper rounding (2 decimal places) for financial accuracy
+- SLA calculations handle edge cases (past dates, zero durations)
+- Document checklist rules support dynamic requirements based on claim characteristics
+- Business rules follow functional programming principles (pure functions, no side effects)
+
 
 ---
 
