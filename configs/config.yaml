@@ -73,3 +73,58 @@ batch:
       - "SMS"
       - "EMAIL"
       # - "WHATSAPP"                        # Optional: Enable WhatsApp notifications
+
+# External API clients configuration
+api_clients:
+  # CBS (Core Banking System) API configuration
+  # Reference: INT-CLM-016 (CBS API Integration)
+  cbs:
+    enabled: true                            # Enable/disable CBS API integration
+    base_url: "https://cbs-api.pli.gov.in/api/v1"  # CBS API base URL
+    api_key: ""                              # CBS API key (load from environment variable)
+    timeout: 30                              # Request timeout in seconds
+    retry_attempts: 3                        # Number of retry attempts for failed requests
+    retry_delay: 1                           # Delay between retries in seconds
+
+  # PFMS (Public Financial Management System) API configuration
+  # Reference: INT-CLM-017 (PFMS API Integration)
+  pfms:
+    enabled: true                            # Enable/disable PFMS API integration
+    base_url: "https://pfms.gov.in/api/v1"   # PFMS API base URL
+    api_key: ""                              # PFMS API key (load from environment variable)
+    timeout: 30                              # Request timeout in seconds
+    retry_attempts: 3                        # Number of retry attempts for failed requests
+    retry_delay: 1                           # Delay between retries in seconds
+
+  # ECMS (Enterprise Content Management System) configuration
+  # Reference: INT-CLM-001 (ECMS Integration)
+  ecms:
+    enabled: true                            # Enable/disable ECMS integration
+    base_url: "https://ecms.pli.gov.in/api"  # ECMS API base URL
+    api_key: ""                              # ECMS API key
+    timeout: 20                              # Request timeout in seconds
+
+  # Policy Service configuration
+  # Reference: INT-CLM-002 (Policy Service Integration)
+  policy_service:
+    enabled: true
+    base_url: "https://policy-service.pli.gov.in"
+    timeout: 10
+
+  # Customer Service configuration
+  # Reference: INT-CLM-003 (Customer Service Integration)
+  customer_service:
+    enabled: true
+    base_url: "https://customer-service.pli.gov.in"
+    timeout: 10
+
+  # Notification Service configuration
+  # Reference: INT-CLM-009 (Email), INT-CLM-011 (WhatsApp)
+  notification_service:
+    enabled: true
+    base_url: "https://notification-service.pli.gov.in"
+    timeout: 15
+    # Notification channels
+    sms_enabled: true
+    email_enabled: true
+    whatsapp_enabled: false                  # Set to true to enable WhatsApp notifications

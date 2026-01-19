@@ -34,6 +34,9 @@ type ExtendedBankValidationData struct {
 	AccountType         *string `json:"account_type,omitempty"`    // SAVINGS, CURRENT, NRE
 	BranchName          *string `json:"branch_name,omitempty"`
 	City                *string `json:"city,omitempty"`
+	State               *string `json:"state,omitempty"`
+	PINCode             *string `json:"pincode,omitempty"`
+	MICRCode            *string `json:"micr_code,omitempty"`
 	FailureReason       *string `json:"failure_reason,omitempty"`
 }
 

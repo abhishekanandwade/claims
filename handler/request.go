@@ -610,3 +610,22 @@ type GeneratePaymentVoucherRequest struct {
 	VoucherType  *string `json:"voucher_type,omitempty" validate:"omitempty,oneof=PAYMENT RECEIPT JOURNAL"`
 	IncludeStamp *bool   `json:"include_stamp,omitempty" validate:"omitempty"`
 }
+
+// CBSAccountValidationRequest represents the request for CBS account validation
+// This is used internally by the BankingHandler to call CBS API
+type CBSAccountValidationRequest struct {
+	AccountNumber     string `json:"account_number" validate:"required"`
+	IFSCCode          string `json:"ifsc_code" validate:"required"`
+	AccountHolderName string `json:"account_holder_name" validate:"required"`
+}
+
+// CBSPennyDropRequest represents the request for CBS penny drop test
+// This is used internally by the BankingHandler to call CBS API
+type CBSPennyDropRequest struct {
+	AccountNumber     string  `json:"account_number" validate:"required"`
+	IFSCCode          string  `json:"ifsc_code" validate:"required"`
+	AccountHolderName string  `json:"account_holder_name" validate:"required"`
+	Amount            float64 `json:"amount" validate:"required"`
+	ReferenceID       string  `json:"reference_id" validate:"required"`
+}
+

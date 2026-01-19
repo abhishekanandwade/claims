@@ -43,6 +43,9 @@ var FxRepo = fx.Module(
 		// SLA tracking repository
 		repo.NewSLATrackingRepository,
 
+		// External API clients
+		repo.NewCBSClient,
+
 		// Add more repository constructors here as needed
 		// repo.New{Resource}Repository,
 	),

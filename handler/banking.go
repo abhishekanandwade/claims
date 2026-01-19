@@ -1,6 +1,9 @@
 package handler
 
 import (
+	"fmt"
+	"time"
+
 	log "gitlab.cept.gov.in/it-2.0-common/n-api-log"
 	serverHandler "gitlab.cept.gov.in/it-2.0-common/n-api-server/handler"
 	serverRoute "gitlab.cept.gov.in/it-2.0-common/n-api-server/route"
@@ -14,10 +17,11 @@ type BankingHandler struct {
 	*serverHandler.Base
 	claimPaymentRepo *repo.ClaimPaymentRepository
 	claimRepo        *repo.ClaimRepository
+	cbsClient        *repo.CBSClient
 }
 
 // NewBankingHandler creates a new banking handler
-func NewBankingHandler(claimPaymentRepo *repo.ClaimPaymentRepository, claimRepo *repo.ClaimRepository) *BankingHandler {
+func NewBankingHandler(claimPaymentRepo *repo.ClaimPaymentRepository, claimRepo *repo.ClaimRepository, cbsClient *repo.CBSClient) *BankingHandler {
 	base := serverHandler.New("Banking").
 		SetPrefix("/v1").
 		AddPrefix("")
@@ -25,6 +29,7 @@ func NewBankingHandler(claimPaymentRepo *repo.ClaimPaymentRepository, claimRepo 
 		Base:             base,
 		claimPaymentRepo: claimPaymentRepo,
 		claimRepo:        claimRepo,
+		cbsClient:        cbsClient,
 	}
 }
 
@@ -82,32 +87,64 @@ func (h *BankingHandler) ValidateBankAccount(sctx *serverRoute.Context, req Bank
 // ValidateViaCBS validates bank account via CBS API
 // POST /banking/validate-account-cbs
 // Reference: Integration with CBS API (Core Banking System)
+// Reference: INT-CLM-016 (CBS API Integration)
+// Reference: FR-CLM-MC-010 (Bank Account Validation API-based)
+// Reference: VR-CLM-API-002 (CBS/PFMS Bank Account API)
 func (h *BankingHandler) ValidateViaCBS(sctx *serverRoute.Context, req BankValidationRequest) (*resp.ExtendedBankValidationResponse, error) {
-	// TODO: Call CBS API endpoint
-	// TODO: Parse CBS API response
-	// TODO: Extract bank details, account status, branch name
+	// Call CBS API for bank account validation
+	cbsReq := repo.CBSAccountValidationRequest{
+		AccountNumber:     req.AccountNumber,
+		IFSCCode:          req.IFSCCode,
+		AccountHolderName: req.AccountHolderName,
+	}
 
-	// Placeholder response
+	cbsResp, err := h.cbsClient.ValidateBankAccount(sctx.Ctx, cbsReq)
+	if err != nil {
+		log.Error(sctx.Ctx, "CBS API validation failed: %v", err)
+		// Return error response with validation failure
+		response := resp.NewBankValidationResponse(
+			false, // valid
+			req.AccountNumber,
+			req.AccountHolderName,
+			"",
+			"CBS_API",
+			0.0, // nameMatchPercentage
+		)
+		response.StatusCode = 500
+		response.Success = false
+		response.Message = "Bank validation via CBS API failed"
+		return response, err
+	}
+
+	// Map CBS API response to ExtendedBankValidationResponse
 	response := resp.NewBankValidationResponse(
-		true, // valid
-		req.AccountNumber,
-		req.AccountHolderName,
-		"State Bank of India", // TODO: Get from CBS API
+		cbsResp.Valid,
+		cbsResp.AccountNumber,
+		cbsResp.AccountHolderName,
+		cbsResp.BankName,
 		"CBS_API",
-		98.5, // nameMatchPercentage
+		cbsResp.NameMatchPercentage,
 	)
 
-	response.Data.IFSCCode = req.IFSCCode
-	accountStatus := "ACTIVE"
-	response.Data.AccountStatus = &accountStatus
-	accountType := "SAVINGS"
-	response.Data.AccountType = &accountType
-	branchName := "Main Branch"
-	response.Data.BranchName = &branchName
-	city := "New Delhi"
-	response.Data.City = &city
+	response.Data.IFSCCode = cbsResp.IFSCCode
+	response.Data.AccountStatus = &cbsResp.AccountStatus
+	response.Data.AccountType = &cbsResp.AccountType
+	response.Data.BranchName = &cbsResp.BranchName
+	response.Data.City = &cbsResp.City
+	// Additional fields from CBS response
+	if cbsResp.State != "" {
+		response.Data.State = &cbsResp.State
+	}
+	if cbsResp.PINCode != "" {
+		response.Data.PINCode = &cbsResp.PINCode
+	}
+	if cbsResp.MICRCode != "" {
+		response.Data.MICRCode = &cbsResp.MICRCode
+	}
 
-	log.Info(sctx.Ctx, "Bank account validated via CBS for account: %s", req.AccountNumber)
+	log.Info(sctx.Ctx, "Bank account validated via CBS for account: %s, valid=%v, name_match=%.2f%%",
+		req.AccountNumber, cbsResp.Valid, cbsResp.NameMatchPercentage)
+
 	return response, nil
 }
 
@@ -142,27 +179,69 @@ func (h *BankingHandler) ValidateViaPFMS(sctx *serverRoute.Context, req BankVali
 // PerformPennyDrop performs penny drop test (1 rupee transfer)
 // POST /banking/penny-drop
 // Reference: BR-CLM-DC-010 (Bank Account Validation)
+// Reference: INT-CLM-016 (CBS API Integration)
 func (h *BankingHandler) PerformPennyDrop(sctx *serverRoute.Context, req BankValidationRequest) (*resp.ExtendedBankValidationResponse, error) {
-	// TODO: Initiate 1 rupee transfer
-	// TODO: Wait for credit confirmation
-	// TODO: Verify name from credit transaction
-	// TODO: Reverse the penny drop
+	// Generate reference ID for penny drop
+	referenceID := fmt.Sprintf("CLAIM-PennyDrop-%d", time.Now().UnixNano())
 
-	// Placeholder response
+	// Call CBS API for penny drop
+	cbsReq := repo.CBSPennyDropRequest{
+		AccountNumber:     req.AccountNumber,
+		IFSCCode:          req.IFSCCode,
+		AccountHolderName: req.AccountHolderName,
+		Amount:            1.0, // Standard penny drop amount
+		ReferenceID:       referenceID,
+	}
+
+	cbsResp, err := h.cbsClient.PerformPennyDrop(sctx.Ctx, cbsReq)
+	if err != nil {
+		log.Error(sctx.Ctx, "CBS penny drop failed: %v", err)
+		// Return error response with validation failure
+		response := resp.NewBankValidationResponse(
+			false, // valid
+			req.AccountNumber,
+			req.AccountHolderName,
+			"",
+			"PENNY_DROP",
+			0.0, // nameMatchPercentage
+		)
+		response.StatusCode = 500
+		response.Success = false
+		response.Message = "Penny drop test via CBS API failed"
+		return response, err
+	}
+
+	// Penny drop successful, reverse the transaction
+	if cbsResp.Success && cbsResp.Status == "CREDITED" {
+		err = h.cbsClient.ReversePennyDrop(sctx.Ctx, cbsResp.TransactionID)
+		if err != nil {
+			log.Error(sctx.Ctx, "Failed to reverse penny drop: %v", err)
+			// Don't fail the response, just log the error
+			// The reversal can be done manually later
+		}
+	}
+
+	// Map CBS API response to ExtendedBankValidationResponse
+	validationMethod := "PENNY_DROP"
 	response := resp.NewBankValidationResponse(
-		true, // valid
-		req.AccountNumber,
-		req.AccountHolderName,
-		"State Bank of India",
-		"PENNY_DROP",
-		100.0, // nameMatchPercentage
+		cbsResp.Success, // valid
+		cbsResp.AccountNumber,
+		cbsResp.AccountHolderName,
+		"", // Bank name not available in penny drop response
+		validationMethod,
+		cbsResp.NameMatchPercentage,
 	)
 
 	response.Data.IFSCCode = req.IFSCCode
 	accountStatus := "ACTIVE"
+	if cbsResp.Status == "FAILED" {
+		accountStatus = "INACTIVE"
+	}
 	response.Data.AccountStatus = &accountStatus
 
-	log.Info(sctx.Ctx, "Penny drop test completed for account: %s", req.AccountNumber)
+	log.Info(sctx.Ctx, "Penny drop test completed for account: %s, success=%v, name_match=%.2f%%, txn_id=%s",
+		req.AccountNumber, cbsResp.Success, cbsResp.NameMatchPercentage, cbsResp.TransactionID)
+
 	return response, nil
 }
 
