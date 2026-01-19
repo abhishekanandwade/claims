@@ -346,6 +346,7 @@ go mod tidy
 **Objective**: Implement death claim registration and processing workflows
 
 ### [ ] Task 2.1: Create ClaimRepository
+<!-- chat-id: c0bb6d25-6e94-40f3-958c-291b2aca57b8 -->
 **Reference**: `seed/template/template.md` - Repository Pattern section
 **Reference**: `seed/tool-docs/db-README.md` - Database access patterns
 
