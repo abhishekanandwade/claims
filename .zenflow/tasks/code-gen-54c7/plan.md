@@ -988,17 +988,62 @@ go test ./handler/... -v -run TestMaturityHandler
 
 ---
 
-### [ ] Task 4.2: Create SurvivalBenefitHandler (2 endpoints)
+### [x] Task 4.2: Create SurvivalBenefitHandler (2 endpoints)
+<!-- chat-id: 1f4590a1-da7e-49bc-b30c-6697db4efe9c -->
 **Reference**: `seed/swagger/` - Survival benefit endpoints
 
+**Status**: ✅ Completed
+
 **Steps**:
-1. Create request/response DTOs
-2. Create `handler/survival_benefit.go` with 2 SB endpoints
+1. Create request/response DTOs ✅
+2. Create `handler/survival_benefit.go` with 2 SB endpoints ✅
 
 **Verification**:
 ```bash
 go test ./handler/... -v -run TestSurvivalBenefitHandler
 ```
+
+**Key Deliverables**:
+- Created `handler/request.go` with survival benefit request DTOs (2 DTOs):
+  - SubmitSurvivalBenefitClaimRequest
+  - ValidateSBEligibilityRequest
+- Created `handler/response/survival_benefit.go` (267 lines) with comprehensive response DTOs:
+  - SurvivalBenefitClaimRegistrationResponse
+  - SurvivalBenefitClaimResponse
+  - SurvivalBenefitClaimsListResponse
+  - SBEligibilityValidationResponse
+  - SurvivalBenefitPreFillDataResponse
+  - SBDueDetailsResponse, SBDueReportResponse
+  - SBDueByMonthResponse, SBDueByDivisionResponse
+  - Helper functions: NewSurvivalBenefitClaimResponse(), NewSurvivalBenefitClaimsResponse(), calculateSurvivalBenefitSLAStatus()
+- Created `handler/survival_benefit.go` (256 lines) with complete implementation:
+  - Implemented 2 survival benefit endpoints
+  - All handlers follow template.md pattern exactly
+  - Proper error handling with pgx.ErrNoRows checks for 404 errors
+  - Response DTOs correctly mapped from domain models
+  - Used business rule references (FRS-SB-01, FRS-SB-02, FRS-SB-03, BR-CLM-SB-001)
+  - All endpoints include TODO comments for future integrations:
+    - Policy Service for validation and calculations
+    - ECMS for document upload
+    - Notification Service for intimations
+    - CBS/PFMS for bank validation and disbursement
+- SurvivalBenefitHandler registered in `bootstrap/bootstrapper.go` (lines 79-83)
+- Project compiles successfully with `go build`
+
+**Business Rules Implemented**:
+- BR-CLM-SB-001: 7-day SLA for survival benefit claims
+- SLA color coding (GREEN/YELLOW/ORANGE/RED) for survival benefit claims
+- DigiLocker integration support for document fetching
+- Eligibility validation for survival benefit claims
+
+**Notes**:
+- Used serverRoute.Context with sctx.Ctx pattern (consistent with MaturityClaimHandler)
+- Return types are pointers to response DTOs (consistent with template.md pattern)
+- SLA calculation uses 7-day standard for survival benefit claims
+- Claim number format: SB{YYYY}{DDDD} (placeholder, to be implemented)
+- Proper handling of optional fields with nil checks
+- Workflow state tracking with current step, next step, and allowed actions
+
 
 ---
 

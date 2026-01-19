@@ -458,3 +458,33 @@ type RequestMaturityFeedbackRequest struct {
 	Channel     string `json:"channel" validate:"required,oneof=SMS EMAIL WHATSAPP"`
 	FeedbackURL string `json:"feedback_url" validate:"required,url"`
 }
+
+// ==================== SURVIVAL BENEFIT REQUEST DTOs ====================
+
+// SubmitSurvivalBenefitClaimRequest represents the request for submitting survival benefit claim
+// POST /claims/survival-benefit/submit
+// Reference: FRS-SB-03, BR-CLM-SB-001 (7 days SLA)
+type SubmitSurvivalBenefitClaimRequest struct {
+	PolicyID             string   `json:"policy_id" validate:"required"`
+	ClaimantName         string   `json:"claimant_name" validate:"required,max=200"`
+	ClaimantRelationship string   `json:"claimant_relationship" validate:"required,max=100"`
+	ClaimantMobile       string   `json:"claimant_mobile" validate:"required,len=10"`
+	ClaimantEmail        string   `json:"claimant_email" validate:"required,email"`
+	DisbursementMode     string   `json:"disbursement_mode" validate:"required,oneof=NEFT POSB CHEQUE"`
+	BankAccountNumber    string   `json:"bank_account_number" validate:"required,max=50"`
+	BankIFSC             string   `json:"bank_ifsc" validate:"required,len=11"`
+	BankAccountType      string   `json:"bank_account_type" validate:"required,oneof=Savings Current"`
+	Documents            []string `json:"documents" validate:"required,dive,max=100"`
+	UseDigiLocker        bool     `json:"use_digiLocker"`
+	IsNRI                bool     `json:"is_nri"`
+	NRICountry           *string  `json:"nri_country,omitempty" validate:"omitempty,max=100"`
+	IsPANAvailable       bool     `json:"is_pan_available"`
+	PANNumber            *string  `json:"pan_number,omitempty" validate:"omitempty,len=10"`
+	Acknowledgement      bool     `json:"acknowledgement" validate:"required"`
+}
+
+// ValidateSBEligibilityRequest represents the request for validating SB eligibility
+// POST /claims/survival-benefit/{id}/validate-eligibility
+type ValidateSBEligibilityRequest struct {
+	ClaimID string `uri:"id" validate:"required"`
+}
