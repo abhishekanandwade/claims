@@ -1,0 +1,45 @@
+# Production environment overrides
+db:
+  host: "${DB_HOST}"  # Use environment variable
+  port: "5432"
+  database: "${DB_NAME}"  # Use environment variable
+  username: "${DB_USER}"  # Use environment variable
+  password: "${DB_PASSWORD}"  # Use environment variable
+  maxconns: 50                # Higher for production
+  minconns: 10
+  maxconnlifetime: 60         # Max connection lifetime (minutes)
+  maxconnidletime: 15         # Max idle time (minutes)
+  healthcheckperiod: 3        # Health check interval (minutes)
+
+trace:
+  enabled: true  # Enable tracing in production
+  processor:
+    type: "otlp-grpc"
+    options:
+      host: "${OTEL_HOST}"  # Use environment variable
+  sampler:
+    type: parent-based-trace-id-ratio
+    options:
+      ratio: 0.1  # Sample 10% in production
+
+cache:
+  redisserver: "${REDIS_HOST}"  # Use environment variable
+  redispassword: "${REDIS_PASSWORD}"  # Use environment variable
+  redisdbindex: 1
+  redisexpirationtime: 20m
+  lccapacity: 50000             # Higher capacity for production
+  lcnumshards: 50               # More shards for production
+  lcttl: 5m                     # Longer TTL in production
+  lcevictionpercentage: 10
+  lcminrefreshdelay: 15m
+  lcmaxrefreshdelay: 30m
+  lcretrybasedelay: 1s
+  lcbatchsize: 20               # Larger batch size
+  lcbatchbuffertimeout: 30s
+  isredisenabled: true
+  islocalcacheenabled: true  # Enable both layers in production
+
+# Override info for production
+info:
+  name: "claims-api"
+  version: "1.0.0"

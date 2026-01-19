@@ -1,0 +1,26 @@
+# System Integration Test environment overrides
+db:
+  host: "sit-db-server.example.com"
+  port: "5432"
+  database: "claims_db_sit"
+  username: "claims_user"
+  password: "${DB_PASSWORD}"  # Use environment variable
+  maxconns: 10
+  minconns: 2
+
+trace:
+  enabled: false  # Disable tracing in SIT
+  sampler:
+    type: always-off
+
+cache:
+  redisserver: "sit-redis.example.com:6379"
+  redispassword: "${REDIS_PASSWORD}"
+  redisdbindex: 1
+  isredisenabled: true
+  islocalcacheenabled: false
+
+# Override info for SIT
+info:
+  name: "claims-api-sit"
+  version: "1.0.0-sit"

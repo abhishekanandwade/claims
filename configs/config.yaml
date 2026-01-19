@@ -1,0 +1,62 @@
+# Application name
+appname: "claims-api"
+
+# Tracing configuration (OpenTelemetry)
+trace:
+  enabled: false  # Enable/disable distributed tracing
+  processor:
+    type: "otlp-grpc"  # Export format: otlp-grpc or otlp-http
+    options:
+      host: "localhost:4317"  # OpenTelemetry collector endpoint
+  sampler:
+    type: always-on  # Sampling strategy: always-on, always-off, parent-based-trace-id-ratio
+    options:
+      ratio: 0.1  # Sample 10% of traces (if using ratio sampler)
+
+# Cache configuration (Redis + Local)
+cache:
+  # Redis settings
+  redisserver: "10.20.30.33:6379"
+  redispassword: ""
+  redisdbindex: 1
+  redisexpirationtime: 20m
+
+  # Local cache settings
+  lccapacity: 10000              # Maximum number of entries
+  lcnumshards: 20                # Number of shards for concurrent access
+  lcttl: 2m                      # Time to live for cache entries
+  lcevictionpercentage: 10       # Percentage to evict when full
+  lcminrefreshdelay: 15m         # Minimum delay before refresh
+  lcmaxrefreshdelay: 30m         # Maximum delay before refresh
+  lcretrybasedelay: 1s           # Base delay for retries
+  lcbatchsize: 10                # Batch size for operations
+  lcbatchbuffertimeout: 30s      # Batch buffer timeout
+
+  # Enable/disable cache layers
+  isredisenabled: true
+  islocalcacheenabled: false
+
+# Database configuration (PostgreSQL)
+db:
+  username: "postgres"
+  password: "your-password"
+  host: "localhost"
+  port: "5432"
+  database: "claims_db"
+  schema: "public"
+
+  # Connection pool settings
+  maxconns: 10                # Maximum connections
+  minconns: 1                 # Minimum connections
+  maxconnlifetime: 30         # Max connection lifetime (minutes)
+  maxconnidletime: 10         # Max idle time (minutes)
+  healthcheckperiod: 5        # Health check interval (minutes)
+
+  # Query timeouts
+  QueryTimeoutLow: 2s         # Simple queries
+  QueryTimeoutMed: 5s         # Complex queries/aggregations
+
+# Application info (for Swagger)
+info:
+  name: "claims-api"
+  version: "1.0.0"

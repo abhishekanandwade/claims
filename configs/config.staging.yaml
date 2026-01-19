@@ -1,0 +1,36 @@
+# Staging environment overrides
+db:
+  host: "staging-db-server.example.com"
+  port: "5432"
+  database: "claims_db_staging"
+  username: "claims_user"
+  password: "${DB_PASSWORD}"  # Use environment variable
+  maxconns: 20
+  minconns: 5
+  maxconnlifetime: 60         # Longer lifetime in staging
+  maxconnidletime: 15
+  healthcheckperiod: 3
+
+trace:
+  enabled: true  # Enable tracing in staging
+  processor:
+    type: "otlp-grpc"
+    options:
+      host: "staging-otel-collector.example.com:4317"
+  sampler:
+    type: parent-based-trace-id-ratio
+    options:
+      ratio: 0.5  # Sample 50% in staging
+
+cache:
+  redisserver: "staging-redis.example.com:6379"
+  redispassword: "${REDIS_PASSWORD}"
+  redisdbindex: 1
+  redisexpirationtime: 30m
+  isredisenabled: true
+  islocalcacheenabled: true  # Enable both layers in staging
+
+# Override info for staging
+info:
+  name: "claims-api-staging"
+  version: "1.0.0-staging"

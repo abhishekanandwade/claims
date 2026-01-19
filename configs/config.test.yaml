@@ -1,0 +1,23 @@
+# Test environment overrides
+db:
+  host: "localhost"
+  port: "5432"
+  database: "claims_db_test"
+  username: "postgres"
+  password: "postgres"
+  maxconns: 5
+  minconns: 1
+
+trace:
+  enabled: false  # Disable tracing in test
+
+cache:
+  redisserver: "localhost:6379"
+  redispassword: ""
+  isredisenabled: false  # Disable Redis in test
+  islocalcacheenabled: false  # Disable all caching in test
+
+# Override info for test
+info:
+  name: "claims-api-test"
+  version: "1.0.0-test"
