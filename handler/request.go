@@ -629,3 +629,99 @@ type CBSPennyDropRequest struct {
 	ReferenceID       string  `json:"reference_id" validate:"required"`
 }
 
+// ========================================
+// FREE LOOK CANCELLATION - REQUEST DTOS
+// ========================================
+
+// TrackPolicyBondRequest represents the request for tracking policy bond delivery
+// POST /policy-bond/track
+// Reference: FR-CLM-BOND-001, BR-CLM-BOND-001
+type TrackPolicyBondRequest struct {
+	PolicyID       string  `json:"policy_id" validate:"required"`
+	BondType       string  `json:"bond_type" validate:"required,oneof=PHYSICAL ELECTRONIC"`
+	DispatchDate   string  `json:"dispatch_date" validate:"required"` // YYYY-MM-DD format
+	DispatchNumber *string `json:"dispatch_number,omitempty" validate:"omitempty,max=50"`
+	CourierName    *string `json:"courier_name,omitempty" validate:"omitempty,max=100"`
+}
+
+// UpdateBondDeliveryRequest represents the request for updating bond delivery status
+// POST /policy-bond/{bond_id}/delivery-status
+// Reference: FR-CLM-BOND-002, BR-CLM-BOND-002
+type UpdateBondDeliveryRequest struct {
+	BondID           string `json:"bond_id" validate:"required"`
+	DeliveryStatus   string `json:"delivery_status" validate:"required,oneof=DELIVERED UNDELIVERED PENDING RETURNED"`
+	DeliveryDate     string `json:"delivery_date" validate:"required"` // YYYY-MM-DD format
+	DeliveryMethod   *string `json:"delivery_method,omitempty" validate:"omitempty,oneof=POST_OFFICE COURIER DIGILOCKER EMAIL"`
+	PODImageURL      *string `json:"pod_image_url,omitempty" validate:"omitempty,url"`
+	ReceiverName     *string `json:"receiver_name,omitempty" validate:"omitempty,max=100"`
+	ReceiverRelation *string `json:"receiver_relation,omitempty" validate:"omitempty,max=50"`
+	Remarks          *string `json:"remarks,omitempty" validate:"omitempty,max=500"`
+}
+
+// BondIDUri represents the bond_id URI parameter
+// GET /policy-bond/{bond_id}/details
+type BondIDUri struct {
+	BondID string `uri:"bond_id" validate:"required"`
+}
+
+// PolicyIDUri represents the policy_id URI parameter
+// GET /policy-bond/policy/{policy_id}
+// GET /freelook/policy/{policy_id}/eligibility
+type PolicyIDUri struct {
+	PolicyID string `uri:"policy_id" validate:"required"`
+}
+
+// SubmitFreeLookCancellationRequest represents the request for submitting free look cancellation
+// POST /freelook/cancellation/submit
+// Reference: FR-CLM-FL-002, BR-CLM-BOND-001, VR-CLM-FL-001
+type SubmitFreeLookCancellationRequest struct {
+	PolicyID             string   `json:"policy_id" validate:"required"`
+	CancellationReason   string   `json:"cancellation_reason" validate:"required,max=500"`
+	Channel              string   `json:"channel" validate:"required,oneof=ONLINE PORTAL POST_OFFICE CPGRAMS EMAIL PHONE"`
+	CancellationDate     string   `json:"cancellation_date" validate:"required"` // YYYY-MM-DD format
+	BondSubmitted        bool     `json:"bond_submitted" validate:"required"`
+	BondType             *string  `json:"bond_type,omitempty" validate:"omitempty,oneof=PHYSICAL ELECTRONIC"`
+	DocumentURLs         []string `json:"document_urls" validate:"required,min=1"`
+	ClaimantName         string   `json:"claimant_name" validate:"required"`
+	ClaimantPhone        *string  `json:"claimant_phone,omitempty" validate:"omitempty,len=10"`
+	ClaimantEmail        *string  `json:"claimant_email,omitempty" validate:"omitempty,email"`
+	BankAccountNumber    *string  `json:"bank_account_number,omitempty" validate:"omitempty,max=30"`
+	BankIFSCCode         *string  `json:"bank_ifsc_code,omitempty" validate:"omitempty,max=20"`
+	RefundAmount         *float64 `json:"refund_amount,omitempty" validate:"omitempty,gt=0"`
+}
+
+// CancellationIDUri represents the cancellation_id URI parameter
+// GET /freelook/cancellation/{cancellation_id}/details
+type CancellationIDUri struct {
+	CancellationID string `uri:"cancellation_id" validate:"required"`
+}
+
+// ReviewFreeLookCancellationRequest represents the request for reviewing free look cancellation (maker-checker)
+// POST /freelook/cancellation/{cancellation_id}/review
+// Reference: BR-CLM-BOND-004 (Maker-Checker Workflow)
+type ReviewFreeLookCancellationRequest struct {
+	CancellationID string `json:"cancellation_id" validate:"required"`
+	ReviewAction   string `json:"review_action" validate:"required,oneof=APPROVE REJECT"`
+	ReviewComments string `json:"review_comments" validate:"required,max=1000"`
+	CheckedBy      string `json:"checked_by" validate:"required"`
+	OverrideAmount *float64 `json:"override_amount,omitempty" validate:"omitempty,gt=0"`
+	OverrideReason *string `json:"override_reason,omitempty" validate:"omitempty,max=500"`
+}
+
+// ProcessFreeLookRefundRequest represents the request for processing free look refund
+// POST /freelook/cancellation/{cancellation_id}/process-refund
+// Reference: FR-CLM-FL-003, BR-CLM-BOND-003
+type ProcessFreeLookRefundRequest struct {
+	CancellationID   string `json:"cancellation_id" validate:"required"`
+	RefundMode       string `json:"refund_mode" validate:"required,oneof=NEFT RTGS POSB CHEQUE"`
+	ReferenceNumber  string `json:"reference_number" validate:"required,max=50"`
+	ProcessedBy      string `json:"processed_by" validate:"required"`
+	FinanceApproved  bool   `json:"finance_approved" validate:"required"`
+}
+
+// FreeLookCancellationIDUri represents the cancellation_id URI parameter for refund status
+// GET /freelook/cancellation/{cancellation_id}/refund-status
+type FreeLookCancellationIDUri struct {
+	CancellationID string `uri:"cancellation_id" validate:"required"`
+}
+
