@@ -112,6 +112,7 @@ var FxHandler = fx.Module(
 			handler.NewAppealHandler,
 			fx.As(new(serverHandler.Handler)),
 			fx.ResultTags(serverHandler.ServerControllersGroupTag),
+			fx.Param(new(repo.AppealRepository), new(repo.ClaimRepository)),
 		),
 
 		// Ombudsman handlers

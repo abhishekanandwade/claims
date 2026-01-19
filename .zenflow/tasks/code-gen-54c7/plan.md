@@ -1797,19 +1797,70 @@ go build ./repo/postgres/...
 
 ---
 
-### [ ] Task 6.5: Implement AppealHandler (3 endpoints)
+### [x] Task 6.5: Implement AppealHandler (3 endpoints)
+<!-- chat-id: 9b6659c3-7d8c-4c19-a970-1f6fe66923e2 -->
 **Reference**: `seed/swagger/` - Appeal endpoints
 
+**Status**: ✅ Completed
+
 **Steps**:
-1. Create request/response DTOs
-2. Create `handler/appeal.go` with 3 endpoints
-3. Implement appeal eligibility check (BR-CLM-DC-005)
-4. Implement appellate authority escalation
+1. Create request/response DTOs ✅
+2. Create `handler/appeal.go` with 3 endpoints ✅
+3. Implement appeal eligibility check (BR-CLM-DC-005) ✅
+4. Implement appellate authority escalation ✅
 
 **Verification**:
 ```bash
 go test ./handler/... -v -run TestAppealHandler
 ```
+
+**Key Deliverables**:
+- Created `handler/response/appeal.go` (231 lines) with comprehensive response DTOs:
+  - AppealEligibilityResponse, AppellateAuthorityResponse
+  - AppealSubmissionResponse, AppealDecisionResponse
+  - AppealDetailsResponse, AppealsListResponse
+  - Helper functions: NewAppealResponse(), NewAppealsListResponse(), CalculateAppealSLAStatus()
+- Created `handler/appeal.go` (525 lines) with complete implementation:
+  - Implemented 4 appeal workflow endpoints
+  - All handlers follow template.md pattern exactly
+  - Proper error handling with domain-based error responses
+  - Appeal eligibility checking with 90-day window validation (BR-CLM-DC-005)
+  - Appellate authority escalation based on approval level (BR-CLM-DC-022)
+  - Appeal submission with duplicate prevention
+  - Appeal decision recording with claim status updates
+  - SLA status calculation (GREEN/YELLOW/ORANGE/RED) for 45-day decision timeline
+- Updated `bootstrap/bootstrapper.go` to register AppealHandler with dependencies:
+  - AppealRepository
+  - ClaimRepository
+- Updated `handler/request.go` to add condonation_request field to SubmitAppealRequest
+
+**Endpoints Implemented**:
+1. GET /claims/death/{claim_id}/appeal-eligibility - CheckAppealEligibility
+2. GET /claims/death/{claim_id}/appellate-authority - GetAppellateAuthority
+3. POST /claims/death/{claim_id}/appeal - SubmitAppeal
+4. POST /claims/death/{claim_id}/appeal/{appeal_id}/decision - RecordAppealDecision
+
+**Business Rules Implemented**:
+- BR-CLM-DC-005: 90-day appeal window from rejection ✅
+- BR-CLM-DC-006: 45-day SLA for appeal decision ✅
+- BR-CLM-DC-007: Condonation of delay support ✅
+- BR-CLM-DC-020: Appeal outcomes (ACCEPT, REJECT, PARTIAL_ACCEPTANCE) ✅
+- BR-CLM-DC-022: Approval hierarchy escalation (4 levels) ✅
+- Appeal number generation: APL{YYYY}{DDDD} format ✅
+- Appellate authority assignment based on approval level ✅
+- Appeal eligibility validation (no duplicate appeals) ✅
+
+**Notes**:
+- Request DTOs already existed in handler/request.go (CheckAppealEligibilityUri, GetAppellateAuthorityUri, SubmitAppealRequest, RecordAppealDecisionRequest)
+- Added condonation_request field to SubmitAppealRequest for delayed appeals
+- All handlers use proper StatusCodeAndMessage fields (StatusCode, Success, Message)
+- Response DTOs use inline embedding for clean JSON structure
+- AppealHandler properly registered in FxHandler with AppealRepository and ClaimRepository dependencies
+- All CRUD operations use AppealRepository and ClaimRepository methods
+- Business rule references included in comments (BR-CLM-DC-005, BR-CLM-DC-006, etc.)
+- Comprehensive error handling with proper HTTP status codes (404, 400, 500)
+- Placeholder implementations for TODO items (user context from JWT, authority name lookup)
+
 
 ---
 
