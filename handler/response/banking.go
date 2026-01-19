@@ -48,11 +48,13 @@ type NEFTTransferInitiatedResponse struct {
 	PaymentID                 string  `json:"payment_id,omitempty"`
 	TransactionID             string  `json:"transaction_id,omitempty"`
 	ReferenceID               string  `json:"reference_id,omitempty"`
+	UTR                       *string `json:"utr,omitempty"` // Unique Transaction Reference from PFMS
 	Amount                    float64 `json:"amount,omitempty"`
 	BankReference             *string `json:"bank_reference,omitempty"`
 	InitiatedAt               string  `json:"initiated_at,omitempty"` // YYYY-MM-DD HH:MM:SS format
 	ExpectedSettlement        *string `json:"expected_settlement,omitempty"` // YYYY-MM-DD HH:MM:SS format
 	Status                    string  `json:"status,omitempty"`
+	BeneficiaryName           string  `json:"beneficiary_name,omitempty"`
 }
 
 // PaymentReconciliationResponse represents the response for payment reconciliation

@@ -45,6 +45,7 @@ var FxRepo = fx.Module(
 
 		// External API clients
 		repo.NewCBSClient,
+		repo.NewPFMSClient,
 
 		// Add more repository constructors here as needed
 		// repo.New{Resource}Repository,

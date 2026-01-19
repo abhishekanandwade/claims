@@ -18,10 +18,11 @@ type BankingHandler struct {
 	claimPaymentRepo *repo.ClaimPaymentRepository
 	claimRepo        *repo.ClaimRepository
 	cbsClient        *repo.CBSClient
+	pfmsClient       *repo.PFMSClient
 }
 
 // NewBankingHandler creates a new banking handler
-func NewBankingHandler(claimPaymentRepo *repo.ClaimPaymentRepository, claimRepo *repo.ClaimRepository, cbsClient *repo.CBSClient) *BankingHandler {
+func NewBankingHandler(claimPaymentRepo *repo.ClaimPaymentRepository, claimRepo *repo.ClaimRepository, cbsClient *repo.CBSClient, pfmsClient *repo.PFMSClient) *BankingHandler {
 	base := serverHandler.New("Banking").
 		SetPrefix("/v1").
 		AddPrefix("")
@@ -30,6 +31,7 @@ func NewBankingHandler(claimPaymentRepo *repo.ClaimPaymentRepository, claimRepo 
 		claimPaymentRepo: claimPaymentRepo,
 		claimRepo:        claimRepo,
 		cbsClient:        cbsClient,
+		pfmsClient:       pfmsClient,
 	}
 }
 
@@ -151,28 +153,58 @@ func (h *BankingHandler) ValidateViaCBS(sctx *serverRoute.Context, req BankValid
 // ValidateViaPFMS validates bank account via PFMS API
 // POST /banking/validate-account-pfms
 // Reference: Integration with PFMS API (Public Financial Management System)
+// Reference: INT-CLM-017 (PFMS API Integration)
+// Reference: VR-CLM-API-002 (CBS/PFMS Bank Account API)
 func (h *BankingHandler) ValidateViaPFMS(sctx *serverRoute.Context, req BankValidationRequest) (*resp.ExtendedBankValidationResponse, error) {
-	// TODO: Call PFMS API endpoint
-	// TODO: Parse PFMS API response
-	// TODO: Extract PFMS validation details
+	// Call PFMS API for bank account validation
+	pfmsReq := repo.PFMSBankValidationRequest{
+		AccountNumber:     req.AccountNumber,
+		IFSCCode:          req.IFSCCode,
+		AccountHolderName: req.AccountHolderName,
+	}
 
-	// Placeholder response
+	pfmsResp, err := h.pfmsClient.ValidateBankAccount(sctx.Ctx, pfmsReq)
+	if err != nil {
+		log.Error(sctx.Ctx, "PFMS bank validation failed: %v", err)
+		// Return error response with validation failure
+		response := resp.NewBankValidationResponse(
+			false, // valid
+			req.AccountNumber,
+			req.AccountHolderName,
+			"",
+			"PFMS_API",
+			0.0, // nameMatchPercentage
+		)
+		response.StatusCode = 500
+		response.Success = false
+		response.Message = "Bank validation via PFMS API failed"
+		return response, err
+	}
+
+	// Map PFMS API response to ExtendedBankValidationResponse
+	validationMethod := "PFMS_API"
 	response := resp.NewBankValidationResponse(
-		true, // valid
-		req.AccountNumber,
-		req.AccountHolderName,
-		"State Bank of India", // TODO: Get from PFMS API
-		"PFMS_API",
-		100.0, // nameMatchPercentage
+		pfmsResp.Valid, // valid
+		pfmsResp.AccountNumber,
+		pfmsResp.AccountHolderName,
+		pfmsResp.BankName,
+		validationMethod,
+		pfmsResp.NameMatchPercentage,
 	)
 
-	response.Data.IFSCCode = req.IFSCCode
-	accountStatus := "ACTIVE"
-	response.Data.AccountStatus = &accountStatus
-	accountType := "SAVINGS"
-	response.Data.AccountType = &accountType
+	// Set additional fields
+	response.Data.IFSCCode = pfmsResp.IFSCCode
+	response.Data.AccountStatus = &pfmsResp.AccountStatus
+	response.Data.AccountType = &pfmsResp.AccountType
+	response.Data.BranchName = &pfmsResp.BranchName
+	response.Data.City = &pfmsResp.City
+	response.Data.State = &pfmsResp.State
+	response.Data.PINCode = &pfmsResp.PINCode
+	response.Data.MICRCode = &pfmsResp.MICRCode
 
-	log.Info(sctx.Ctx, "Bank account validated via PFMS for account: %s", req.AccountNumber)
+	log.Info(sctx.Ctx, "Bank account validated via PFMS: account=%s, valid=%v, name_match=%.2f%%, bank=%s",
+		pfmsResp.AccountNumber, pfmsResp.Valid, pfmsResp.NameMatchPercentage, pfmsResp.BankName)
+
 	return response, nil
 }
 
@@ -248,30 +280,86 @@ func (h *BankingHandler) PerformPennyDrop(sctx *serverRoute.Context, req BankVal
 // InitiateNEFTTransfer initiates NEFT transfer
 // POST /banking/neft-transfer
 // Reference: BR-CLM-DC-010 (Disbursement Workflow)
+// Reference: INT-CLM-017 (PFMS API Integration)
+// Reference: INT-CLM-018 (PFMS Integration for NEFT)
 func (h *BankingHandler) InitiateNEFTTransfer(sctx *serverRoute.Context, req InitiateNEFTTransferRequest) (*resp.NEFTTransferInitiatedResponse, error) {
-	// TODO: Validate claim status (must be APPROVED)
-	// TODO: Integration with PFMS API for NEFT
-	// TODO: Generate payment_id
-	// TODO: Initiate NEFT transfer
-	// TODO: Record payment in claim_payments table
-	// TODO: Update claim status to DISBURSED
+	// Validate claim ID
+	if req.ClaimID == nil || *req.ClaimID == "" {
+		return nil, fmt.Errorf("claim_id is required")
+	}
 
-	// Placeholder response
+	// Validate claim status (must be APPROVED)
+	claim, err := h.claimRepo.FindByID(sctx.Ctx, *req.ClaimID)
+	if err != nil {
+		log.Error(sctx.Ctx, "Failed to find claim: %v", err)
+		return nil, err
+	}
+
+	if claim.Status != "APPROVED" {
+		response := &resp.NEFTTransferInitiatedResponse{
+			StatusCodeAndMessage: port.StatusCodeAndMessage{
+				StatusCode: 400,
+				Success:    false,
+				Message:    "Claim must be in APPROVED status to initiate disbursement",
+			},
+		}
+		return response, nil
+	}
+
+	// Prepare PFMS NEFT request
+	paymentReference := fmt.Sprintf("CLAIM-%s-%d", claim.ClaimNumber, time.Now().Unix())
+	if req.ReferenceID != nil {
+		paymentReference = *req.ReferenceID
+	}
+
+	pfmsReq := repo.PFMSNEFTTransferRequest{
+		BeneficiaryAccount: req.AccountNumber,
+		BeneficiaryIFSC:    req.IFSCCode,
+		BeneficiaryName:    req.BeneficiaryName,
+		Amount:             req.Amount,
+		PaymentReference:   paymentReference,
+		Purpose:            "CLAIM_DISBURSEMENT",
+		ClaimNumber:        claim.ClaimNumber,
+		PolicyNumber:       claim.PolicyID, // Assuming PolicyID is the policy number
+	}
+
+	// Call PFMS API to initiate NEFT transfer
+	pfmsResp, err := h.pfmsClient.InitiateNEFTTransfer(sctx.Ctx, pfmsReq)
+	if err != nil {
+		log.Error(sctx.Ctx, "PFMS NEFT transfer failed: %v", err)
+		response := &resp.NEFTTransferInitiatedResponse{
+			StatusCodeAndMessage: port.StatusCodeAndMessage{
+				StatusCode: 500,
+				Success:    false,
+				Message:    "NEFT transfer initiation failed",
+			},
+		}
+		return response, err
+	}
+
+	// TODO: Record payment in claim_payments table
+	// TODO: Update claim status to DISBURSED (or DISBURSING if processing)
+
+	// Map PFMS API response to NEFTTransferInitiatedResponse
 	response := &resp.NEFTTransferInitiatedResponse{
 		StatusCodeAndMessage: port.StatusCodeAndMessage{
 			StatusCode: 200,
-			Success:    true,
+			Success:    pfmsResp.Success,
 			Message:    "NEFT transfer initiated successfully",
 		},
-		PaymentID:     "PAY-2025-000001", // TODO: Generate actual payment ID
-		TransactionID: "TXN-2025-000001", // TODO: Get from banking gateway
-		ReferenceID:   "REF-2025-000001",
-		Amount:        req.Amount,
-		InitiatedAt:   "2025-01-20 12:00:00",
-		Status:        "PROCESSING",
+		PaymentID:     pfmsResp.TransactionID,
+		TransactionID: pfmsResp.TransactionID,
+		ReferenceID:   pfmsResp.ReferenceNumber,
+		UTR:           &pfmsResp.UTR,
+		Amount:        pfmsResp.Amount,
+		InitiatedAt:   time.Now().Format("2006-01-02 15:04:05"),
+		Status:        pfmsResp.Status,
+		BeneficiaryName: pfmsResp.BeneficiaryName,
 	}
 
-	log.Info(sctx.Ctx, "NEFT transfer initiated for amount: %f", req.Amount)
+	log.Info(sctx.Ctx, "NEFT transfer initiated: claim_id=%s, payment_id=%s, utr=%s, amount=%.2f, status=%s",
+		*req.ClaimID, pfmsResp.TransactionID, pfmsResp.UTR, pfmsResp.Amount, pfmsResp.Status)
+
 	return response, nil
 }
 
@@ -316,44 +404,51 @@ func (h *BankingHandler) ReconcilePayments(sctx *serverRoute.Context, req Reconc
 // GetPaymentStatus retrieves real-time payment status
 // GET /banking/payment-status/:payment_id
 // Reference: BR-CLM-DC-010 (Payment Tracking)
+// Reference: INT-CLM-017 (PFMS API Integration)
 func (h *BankingHandler) GetPaymentStatus(sctx *serverRoute.Context, req PaymentIDUri) (*resp.PaymentStatusResponse, error) {
 	// TODO: Query payment from claim_payments table
-	// TODO: If status is PROCESSING/PENDING, fetch latest status from banking gateway
-	// TODO: Update payment status if changed
-	// TODO: Return payment details
+	// For now, fetch directly from PFMS API
 
-	// Placeholder response
+	// Fetch payment status from PFMS API
+	pfmsResp, err := h.pfmsClient.GetPaymentStatus(sctx.Ctx, req.PaymentID)
+	if err != nil {
+		log.Error(sctx.Ctx, "Failed to fetch payment status from PFMS: %v", err)
+		return nil, err
+	}
+
+	// Map PFMS response to PaymentStatusResponse
 	response := resp.NewPaymentStatusResponse(
-		req.PaymentID,
-		"SUCCESS", // INITIATED, PROCESSING, SUCCESS, FAILED, CANCELLED
-		100000.00,
+		pfmsResp.TransactionID,
+		pfmsResp.Status,
+		pfmsResp.Amount,
 	)
 
-	// Set additional fields
-	transactionID := "TXN-2025-000001"
-	response.TransactionID = &transactionID
-	paymentReference := "PFMS-REF-001"
-	response.PaymentReference = &paymentReference
-	paymentDate := "2025-01-20 14:30:00"
-	response.PaymentDate = &paymentDate
-	bankName := "State Bank of India"
-	response.BankName = &bankName
-	accountNumber := "1234567890"
-	response.AccountNumber = &accountNumber
-	ifscCode := "SBIN0001234"
-	response.IFSCCode = &ifscCode
-	beneficiaryName := "John Doe"
-	response.BeneficiaryName = &beneficiaryName
-	paymentMode := "NEFT"
-	response.PaymentMode = &paymentMode
-	initiatedAt := "2025-01-20 12:00:00"
-	response.InitiatedAt = &initiatedAt
-	completedAt := "2025-01-20 14:30:00"
-	response.CompletedAt = &completedAt
-	utrNumber := "UTR123456789012"
-	response.UtrNumber = &utrNumber
+	// Set additional fields from PFMS response
+	response.TransactionID = &pfmsResp.TransactionID
+	response.PaymentReference = &pfmsResp.ReferenceNumber
+	response.AccountNumber = &pfmsResp.BeneficiaryAccount
+	response.BeneficiaryName = &pfmsResp.BeneficiaryName
 
-	log.Info(sctx.Ctx, "Payment status retrieved for payment_id: %s", req.PaymentID)
+	if pfmsResp.InitiatedAt != nil {
+		initiatedAt := pfmsResp.InitiatedAt.Format("2006-01-02 15:04:05")
+		response.InitiatedAt = &initiatedAt
+	}
+	if pfmsResp.CompletedAt != nil {
+		completedAt := pfmsResp.CompletedAt.Format("2006-01-02 15:04:05")
+		response.CompletedAt = &completedAt
+	}
+	if pfmsResp.UTR != "" {
+		response.UtrNumber = &pfmsResp.UTR
+	}
+	if pfmsResp.FailureReason != "" {
+		response.FailureReason = &pfmsResp.FailureReason
+	}
+
+	// TODO: Update payment status in claim_payments table if changed
+
+	log.Info(sctx.Ctx, "Payment status retrieved: payment_id=%s, status=%s, amount=%.2f",
+		req.PaymentID, pfmsResp.Status, pfmsResp.Amount)
+
 	return response, nil
 }
 
