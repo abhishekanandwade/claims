@@ -725,3 +725,135 @@ type FreeLookCancellationIDUri struct {
 	CancellationID string `uri:"cancellation_id" validate:"required"`
 }
 
+// ==================== OMBUDSMAN REQUEST DTOs ====================
+
+// SubmitOmbudsmanComplaintRequest represents a new ombudsman complaint submission
+// FR-CLM-OMB-001: Complaint Intake & Registration
+// BR-CLM-OMB-001: Admissibility checks
+type SubmitOmbudsmanComplaintRequest struct {
+	// Complainant Details
+	ComplainantName      string `json:"complainant_name" validate:"required,max=200"`
+	ComplainantAddress   string `json:"complainant_address" validate:"required,max=500"`
+	ComplainantMobile    string `json:"complainant_mobile" validate:"required,len=10"`
+	ComplainantEmail     string `json:"complainant_email" validate:"omitempty,email,max=100"`
+	ComplainantRole      string `json:"complainant_role" validate:"required,oneof=POLICYHOLDER NOMINEE LEGAL_HEIR ASSIGNEE AUTHORIZED_REPRESENTATIVE"`
+	LanguagePreference   string `json:"language_preference" validate:"required,oneof=ENGLISH HINDI"`
+	IDProofType          string `json:"id_proof_type" validate:"required,oneof=AADHAAR PAN PASSPORT OTHER"`
+	IDProofNumber        string `json:"id_proof_number" validate:"required,max=50"`
+
+	// Policy/Claim Details
+	PolicyNumber         string `json:"policy_number" validate:"required,max=50"`
+	ClaimNumber          string `json:"claim_number,omitempty" validate:"omitempty,max=50"`
+	PolicyType           string `json:"policy_type" validate:"required,oneof=PLI RPLI"`
+	AgentName            string `json:"agent_name,omitempty" validate:"omitempty,max=200"`
+	AgentBranch          string `json:"agent_branch,omitempty" validate:"omitempty,max=100"`
+
+	// Complaint Details
+	IncidentDate         string `json:"incident_date" validate:"required"`
+	RepresentationDate   string `json:"representation_date" validate:"required"` // Date representation made to insurer
+	ComplaintCategory    string `json:"complaint_category" validate:"required,oneof=CLAIM_DELAY PARTIAL_REPUDIATION FULL_REPUDIATION PREMIUM_DISPUTE POLICY_MISREPRESENTATION NON_ISSUANCE_OF_POLICY POLICY_SERVICING OTHER"`
+	IssueDescription     string `json:"issue_description" validate:"required,max=5000"`
+	ReliefSought         string `json:"relief_sought" validate:"required,max=2000"`
+	ClaimValue           float64 `json:"claim_value,omitempty" validate:"omitempty,min=0"`
+
+	// Additional Information
+	ParallelLitigation   bool   `json:"parallel_litigation" validate:"required"` // BR-CLM-OMB-001: No parallel litigation check
+	IsEmergency          bool   `json:"is_emergency" validate:"required"`
+	Channel              string `json:"channel" validate:"required,oneof=WEB_PORTAL MOBILE_APP EMAIL OFFLINE_FORM WALK_IN"`
+	AttachmentIDs        []string `json:"attachment_ids,omitempty" validate:"omitempty,dive,max=50"`
+}
+
+// ComplaintIDUri represents the complaint_id URI parameter
+// GET /ombudsman/{complaint_id}/details
+// POST /ombudsman/{complaint_id}/assign
+// POST /ombudsman/{complaint_id}/admissibility
+// GET /ombudsman/{complaint_id}/timeline
+type ComplaintIDUri struct {
+	ComplaintID string `uri:"complaint_id" validate:"required"`
+}
+
+// AssignOmbudsmanRequest represents assigning an ombudsman to a complaint
+// FR-CLM-OMB-002: Jurisdiction Mapping
+// BR-CLM-OMB-002: Jurisdiction mapping
+// BR-CLM-OMB-003: Conflict of interest screening
+type AssignOmbudsmanRequest struct {
+	OmbudsmanID      string `json:"ombudsman_id" validate:"required"`
+	OmbudsmanCenter  string `json:"ombudsman_center" validate:"required"`
+	ConflictCheck    bool   `json:"conflict_check" validate:"required"` // Whether conflict screening was performed
+	OverrideReason   string `json:"override_reason,omitempty" validate:"omitempty,max=500"` // If manual override
+}
+
+// ReviewAdmissibilityRequest represents admissibility review decision
+// BR-CLM-OMB-001: Admissibility checks
+type ReviewAdmissibilityRequest struct {
+	Admissible            bool    `json:"admissible" validate:"required"`
+	AdmissibilityReason   string  `json:"admissibility_reason" validate:"required,max=1000"`
+	InadmissibilityReason string  `json:"inadmissibility_reason,omitempty" validate:"omitempty,max=1000"` // If not admissible
+	ReviewedBy            string  `json:"reviewed_by" validate:"required"`
+}
+
+// RecordMediationRequest represents recording mediation outcome
+// FR-CLM-OMB-003: Hearing Scheduling & Management
+// BR-CLM-OMB-004: Mediation recommendation
+type RecordMediationRequest struct {
+	HearingID              string    `json:"hearing_id" validate:"required"`
+	MediationDate          string    `json:"mediation_date" validate:"required"`
+	ConsentToMediate       bool      `json:"consent_to_mediate" validate:"required"`
+	MediationSuccessful    bool      `json:"mediation_successful" validate:"required"`
+	SettlementTerms        string    `json:"settlement_terms,omitempty" validate:"omitempty,max=5000"`
+	ComplainantAccepted    bool      `json:"complainant_accepted" validate:"required"`
+	InsurerAccepted        bool      `json:"insurer_accepted" validate:"required"`
+	RecordingOfficer       string    `json:"recording_officer" validate:"required"`
+	Remarks                string    `json:"remarks,omitempty" validate:"omitempty,max=2000"`
+}
+
+// IssueAwardRequest represents issuing an award (mediation or adjudication)
+// FR-CLM-OMB-004: Award Issuance & Enforcement
+// BR-CLM-OMB-005: Award issuance with ₹50 lakh cap
+type IssueAwardRequest struct {
+	AwardType              string  `json:"award_type" validate:"required,oneof=MEDIATION_RECOMMENDATION ADJUDICATION_AWARD"`
+	AwardAmount            float64 `json:"award_amount" validate:"required,min=0"` // BR-CLM-OMB-005: Must be ≤ ₹50 lakh
+	AwardCurrency          string  `json:"award_currency" validate:"required,len=3"` // INR
+	InterestRate           float64 `json:"interest_rate,omitempty" validate:"omitempty,min=0,max=20"` // Interest % if applicable
+	InterestAmount         float64 `json:"interest_amount,omitempty" validate:"omitempty,min=0"`
+	TotalAwardAmount       float64 `json:"total_award_amount" validate:"required,min=0"` // Including interest
+	AwardReasoning         string  `json:"award_reasoning" validate:"required,max=10000"`
+	DigitalSignature       string  `json:"digital_signature" validate:"required"` // Ombudsman's digital signature hash
+	DigitalSignatureDate   string  `json:"digital_signature_date" validate:"required"`
+	SupportingDocuments    []string `json:"supporting_documents,omitempty" validate:"omitempty,dive,max=50"`
+	ComplianceDeadline     string  `json:"compliance_deadline" validate:"required"` // 30 days from award date (BR-CLM-OMB-006)
+	ReminderSchedule       []string `json:"reminder_schedule,omitempty" validate:"omitempty,dive,datetime"` // Days 15, 7, 2 before deadline
+	IssuedBy               string  `json:"issued_by" validate:"required"`
+}
+
+// RecordComplianceRequest represents recording insurer compliance with award
+// BR-CLM-OMB-006: Insurer compliance monitoring
+type RecordComplianceRequest struct {
+	ComplianceStatus       string  `json:"compliance_status" validate:"required,oneof=ACCEPTED PAYMENT_INITIATED PAYMENT_COMPLETED OBJECTION_FILED ESCALATED"`
+	ComplianceDate         string  `json:"compliance_date" validate:"required"`
+	PaymentReference       string  `json:"payment_reference,omitempty" validate:"omitempty,max=100"` // UTR/transaction reference
+	PaymentAmount          float64 `json:"payment_amount,omitempty" validate:"omitempty,min=0"`
+	ObjectionReason        string  `json:"objection_reason,omitempty" validate:"omitempty,max=5000"` // If objected
+	RecordedBy             string  `json:"recorded_by" validate:"required"`
+}
+
+// CloseComplaintRequest represents closing an ombudsman complaint
+// BR-CLM-OMB-007: Complaint closure & archival
+type CloseComplaintRequest struct {
+	ClosureReason         string  `json:"closure_reason" validate:"required,max=2000"`
+	ClosureType           string  `json:"closure_type" validate:"required,oneof=AWARD_FULFILLED CONDONATION_WITHDRAWN IRDAI_ESCALATED OTHER"`
+	RetentionPeriod       int     `json:"retention_period" validate:"required"` // Years: 10 for awards, 7 for mediation (BR-CLM-OMB-007)
+	ClosedBy              string  `json:"closed_by" validate:"required"`
+}
+
+// EscalateToIRDAIRequest represents escalating non-compliance to IRDAI
+// BR-CLM-OMB-006: Escalate to IRDAI on breach
+type EscalateToIRDAIRequest struct {
+	EscalationReason       string  `json:"escalation_reason" validate:"required,max=2000"`
+	BreachDetails          string  `json:"breach_details" validate:"required,max=5000"`
+	DaysOverdue            int     `json:"days_overdue" validate:"required,min=0"`
+	EscalationDate         string  `json:"escalation_date" validate:"required"`
+	EscalatedBy            string  `json:"escalated_by" validate:"required"`
+	IRDAIReference         string  `json:"irdai_reference,omitempty" validate:"omitempty,max=100"`
+}
+
