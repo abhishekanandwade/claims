@@ -955,3 +955,38 @@ type IFSCCodeUri struct {
 type GetDynamicFormFieldsRequest struct {
 	DeathType string `form:"death_type" validate:"required,oneof=NATURAL ACCIDENTAL UNNATURAL SUICIDE"` // Death type for dynamic fields
 }
+
+// ==================== LOOKUP & REFERENCE REQUEST DTOs ====================
+
+// GetDocumentTypesRequest represents the request for getting document types
+// GET /lookup/document-types
+// Reference: DFC-001 (Dynamic document checklist)
+type GetDocumentTypesRequest struct {
+	ClaimType        string  `form:"claim_type" validate:"required,oneof=DEATH MATURITY SURVIVAL_BENEFIT FREELOOK"`
+	DeathType        *string `form:"death_type,omitempty" validate:"omitempty,oneof=NATURAL UNNATURAL ACCIDENTAL SUICIDE"`
+	NominationStatus *string `form:"nomination_status,omitempty" validate:"omitempty,oneof=NOMINATED NOT_NOMINATED"`
+}
+
+// GetRejectionReasonsRequest represents the request for getting rejection reasons
+// GET /lookup/rejection-reasons
+// Reference: BR-CLM-DC-020 (Claim rejection with appeal rights)
+type GetRejectionReasonsRequest struct {
+	ClaimType string `form:"claim_type" validate:"required,oneof=DEATH MATURITY SURVIVAL_BENEFIT FREELOOK"`
+}
+
+// GetInvestigationOfficersRequest represents the request for getting investigation officers
+// GET /lookup/investigation-officers
+// Reference: BR-CLM-DC-002 (Investigation assignment)
+type GetInvestigationOfficersRequest struct {
+	Jurisdiction  string  `form:"jurisdiction" validate:"required,max=100"`
+	Rank          *string `form:"rank,omitempty" validate:"omitempty,max=100"`
+	AvailableOnly bool    `form:"available_only"` // Default: true
+}
+
+// GetApproversListRequest represents the request for getting approvers
+// GET /lookup/approvers
+// Reference: BR-CLM-DC-022 (Approval hierarchy)
+type GetApproversListRequest struct {
+	ClaimAmount float64 `form:"claim_amount" validate:"required,gt=0"`
+	Location    string  `form:"location" validate:"required,max=200"`
+}
