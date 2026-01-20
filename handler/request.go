@@ -1079,3 +1079,23 @@ type ExportReportRequest struct {
 	EmailTo    *string `json:"email_to,omitempty" validate:"omitempty,email"`
 	IncludeCharts *bool `json:"include_charts,omitempty"` // Default: false
 }
+
+// ========================================
+// WORKFLOW MANAGEMENT - REQUEST DTOS
+// ========================================
+
+// WorkflowIDUri represents the workflow_id URI parameter
+// GET /workflows/death-claim/{workflow_id}
+// POST /workflows/{workflow_id}/signal
+// Reference: INT-CLM-020 (Temporal integration)
+type WorkflowIDUri struct {
+	WorkflowID string `uri:"workflow_id" validate:"required"`
+}
+
+// SignalWorkflowRequest represents the request for sending a signal to a Temporal workflow
+// POST /workflows/{workflow_id}/signal
+// Reference: INT-CLM-020 (Temporal integration)
+type SignalWorkflowRequest struct {
+	SignalName string                 `json:"signal_name" validate:"required"` // e.g., "investigation_complete", "document_uploaded", "approval_received"
+	SignalData map[string]interface{} `json:"signal_data" validate:"required"` // Signal-specific payload
+}
