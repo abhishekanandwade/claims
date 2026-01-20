@@ -894,3 +894,24 @@ type GenerateFeedbackLinkRequest struct {
 	ExpiryDays    *int    `json:"expiry_days,omitempty" validate:"omitempty,min=1,max=30"` // Default: 7 days
 }
 
+// ==================== POLICY SERVICE REQUEST DTOs ====================
+
+// CheckPolicyClaimEligibilityRequest represents the request for checking policy claim eligibility
+// GET /policies/{policy_id}/claim-eligibility
+// Reference: INT-CLM-004 (Policy Service Integration)
+type CheckPolicyClaimEligibilityRequest struct {
+	PolicyID  string `json:"policy_id" validate:"required"` // From URI parameter
+	ClaimType string `json:"claim_type" validate:"required,oneof=DEATH MATURITY SURVIVAL_BENEFIT FREELOOK"` // From query parameter
+}
+
+// CalculateFreeLookRefundRequest represents the request for calculating free look refund
+// POST /policies/{policy_id}/freelook-refund-calculation
+// Reference: BR-CLM-BOND-003 (Refund calculation)
+type CalculateFreeLookRefundRequest struct {
+	PolicyID          string  `json:"policy_id" validate:"required"` // From URI parameter
+	PremiumPaid       float64 `json:"premium_paid" validate:"required,gt=0"`
+	CancellationDate  string  `json:"cancellation_date" validate:"required"` // YYYY-MM-DD format
+	BondType          string  `json:"bond_type" validate:"required,oneof=PHYSICAL ELECTRONIC"`
+	DeliveryDate      *string `json:"delivery_date,omitempty"` // YYYY-MM-DD format (required for PHYSICAL bonds)
+}
+
