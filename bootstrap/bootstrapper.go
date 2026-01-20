@@ -1,10 +1,10 @@
 package bootstrap
 
 import (
-	"go.uber.org/fx"
 	serverHandler "gitlab.cept.gov.in/it-2.0-common/n-api-server/handler"
 	handler "gitlab.cept.gov.in/pli/claims-api/handler"
 	repo "gitlab.cept.gov.in/pli/claims-api/repo/postgres"
+	"go.uber.org/fx"
 )
 
 // FxRepo module provides all repository implementations
@@ -143,6 +143,7 @@ var FxHandler = fx.Module(
 			handler.NewValidationServiceHandler,
 			fx.As(new(serverHandler.Handler)),
 			fx.ResultTags(serverHandler.ServerControllersGroupTag),
+			fx.Param(new(repo.CBSClient), new(repo.PFMSClient), new(repo.ClaimRepository), new(repo.PolicyBondTrackingRepository)),
 		),
 
 		// Lookup handlers
