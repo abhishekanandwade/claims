@@ -176,6 +176,11 @@ var FxHandler = fx.Module(
 			handler.NewStatusHandler,
 			fx.As(new(serverHandler.Handler)),
 			fx.ResultTags(serverHandler.ServerControllersGroupTag),
+			fx.Param(new(*repo.ClaimRepository)),
+			fx.Param(new(*repo.ClaimHistoryRepository)),
+			fx.Param(new(*repo.ClaimPaymentRepository)),
+			fx.Param(new(*repo.InvestigationRepository)),
+			fx.Param(new(*repo.InvestigationProgressRepository)),
 		),
 
 		// Add more handler constructors here as needed
