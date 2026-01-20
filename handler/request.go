@@ -990,3 +990,92 @@ type GetApproversListRequest struct {
 	ClaimAmount float64 `form:"claim_amount" validate:"required,gt=0"`
 	Location    string  `form:"location" validate:"required,max=200"`
 }
+
+// ========================================
+// REPORTING & ANALYTICS - REQUEST DTOS
+// ========================================
+
+// GenerateClaimReportRequest represents the request for generating claim reports
+// POST /reports/claims/generate
+// Reference: FR-CLM-RPT-001
+type GenerateClaimReportRequest struct {
+	ReportType     string  `json:"report_type" validate:"required,oneof=CLAIMS_PENDING CLAIMS_APPROVED CLAIMS_REJECTED CLAIMS_PAID SLA_BREACH INVESTIGATION_SUMMARY"`
+	StartDate      string  `json:"start_date" validate:"required"` // YYYY-MM-DD format
+	EndDate        string  `json:"end_date" validate:"required"`   // YYYY-MM-DD format
+	ClaimType      *string `json:"claim_type,omitempty" validate:"omitempty,oneof=DEATH MATURITY SURVIVAL_BENEFIT FREELOOK"`
+	Division       *string `json:"division,omitempty" validate:"omitempty,max=100"`
+	District       *string `json:"district,omitempty" validate:"omitempty,max=100"`
+	IncludeDetails *bool   `json:"include_details,omitempty"` // Default: false
+}
+
+// GenerateDashboardReportRequest represents the request for generating dashboard reports
+// POST /reports/dashboard/generate
+// Reference: FR-CLM-RPT-002
+type GenerateDashboardReportRequest struct {
+	ReportType string `json:"report_type" validate:"required,oneof=DAILY WEEKLY MONTHLY QUARTERLY"`
+	ReportDate string `json:"report_date" validate:"required"` // YYYY-MM-DD format
+	Metrics    []string `json:"metrics,omitempty" validate:"omitempty,dive,oneof=CLAIMS_REGISTERED CLAIMS_APPROVED CLAIMS_REJECTED CLAIMS_PAID PENDING_APPROVALS OVERDUE_CLAIMS AVG_PROCESSING_TIME PAYMENT_DISBURSED SLA_COMPLIANCE"`
+}
+
+// GetClaimStatisticsRequest represents the request for getting claim statistics
+// GET /reports/statistics
+// Reference: FR-CLM-RPT-003
+type GetClaimStatisticsRequest struct {
+	StartDate string `form:"start_date" validate:"required"` // YYYY-MM-DD format
+	EndDate   string `form:"end_date" validate:"required"`   // YYYY-MM-DD format
+	GroupBy   string `form:"group_by" validate:"required,oneof=day week month quarter division district claim_type status"`
+}
+
+// GetSlaReportRequest represents the request for getting SLA compliance report
+// GET /reports/sla-compliance
+// Reference: BR-CLM-DC-003, BR-CLM-DC-004, BR-CLM-DC-021
+type GetSlaReportRequest struct {
+	StartDate    string  `form:"start_date" validate:"required"` // YYYY-MM-DD format
+	EndDate      string  `form:"end_date" validate:"required"`   // YYYY-MM-DD format
+	SlaType      string `form:"sla_type" validate:"required,oneof=CLAIM_APPROVAL INVESTIGATION DOCUMENT_SUBMISSION PAYMENT_DISBURSEMENT APPEAL_DECISION MATURITY_CLAIM SURVIVAL_BENEFIT"`
+	Division     *string `form:"division,omitempty" validate:"omitempty,max=100"`
+	BreachedOnly *bool   `form:"breached_only"` // Default: false
+}
+
+// GetPaymentReportRequest represents the request for getting payment report
+// GET /reports/payments
+// Reference: BR-CLM-PAY-001
+type GetPaymentReportRequest struct {
+	StartDate    string  `form:"start_date" validate:"required"` // YYYY-MM-DD format
+	EndDate      string  `form:"end_date" validate:"required"`   // YYYY-MM-DD format
+	PaymentMode  *string `form:"payment_mode,omitempty" validate:"omitempty,oneof=NEFT POSB CHEQUE"`
+	PaymentStatus *string `form:"payment_status,omitempty" validate:"omitempty,oneof=PENDING PROCESSING SUCCESS FAILED"`
+	Division     *string `form:"division,omitempty" validate:"omitempty,max=100"`
+}
+
+// GetInvestigationReportRequest represents the request for getting investigation report
+// GET /reports/investigation
+// Reference: BR-CLM-DC-002
+type GetInvestigationReportRequest struct {
+	StartDate          string  `form:"start_date" validate:"required"` // YYYY-MM-DD format
+	EndDate            string  `form:"end_date" validate:"required"`   // YYYY-MM-DD format
+	InvestigationStatus *string `form:"investigation_status,omitempty" validate:"omitempty,oneof=ASSIGNED IN_PROGRESS REPORT_SUBMITTED UNDER_REVIEW COMPLETED"`
+	Outcome            *string `form:"outcome,omitempty" validate:"omitempty,oneof=CLEAR SUSPECT FRAUD"`
+	InvestigatorID     *string `form:"investigator_id,omitempty" validate:"omitempty,max=50"`
+}
+
+// GetAuditTrailRequest represents the request for getting audit trail
+// GET /reports/audit-trail
+// Reference: Security requirements - Audit trail
+type GetAuditTrailRequest struct {
+	EntityID   string `uri:"entity_id" validate:"required"`
+	EntityType string `uri:"entity_type" validate:"required,oneof=claim payment investigation appeal ombudsman_complaint aml_alert policy_bond free_look_cancellation"`
+	StartDate  string `form:"start_date" validate:"required"` // YYYY-MM-DD format
+	EndDate    string `form:"end_date" validate:"required"`   // YYYY-MM-DD format
+	ActionType *string `form:"action_type,omitempty" validate:"omitempty,max=100"`
+}
+
+// ExportReportRequest represents the request for exporting reports
+// POST /reports/export
+// Reference: FR-CLM-RPT-004
+type ExportReportRequest struct {
+	ReportID   string `json:"report_id" validate:"required"`
+	Format     string `json:"format" validate:"required,oneof=PDF EXCEL CSV"`
+	EmailTo    *string `json:"email_to,omitempty" validate:"omitempty,email"`
+	IncludeCharts *bool `json:"include_charts,omitempty"` // Default: false
+}
