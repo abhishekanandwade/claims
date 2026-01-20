@@ -857,3 +857,40 @@ type EscalateToIRDAIRequest struct {
 	IRDAIReference         string  `json:"irdai_reference,omitempty" validate:"omitempty,max=100"`
 }
 
+// ==================== NOTIFICATION REQUEST DTOs ====================
+
+// SendNotificationRequest represents the request for sending a notification
+// POST /notifications/send
+// Reference: BR-CLM-DC-019 (Communication triggers)
+type SendNotificationRequest struct {
+	NotificationType string  `json:"notification_type" validate:"required"` // CLAIM_REGISTERED, CLAIM_APPROVED, CLAIM_REJECTED, DOCUMENT_REQUIRED, PAYMENT_PROCESSED, MATURITY_DUE, etc.
+	ClaimID          *string `json:"claim_id,omitempty" validate:"omitempty,max=50"`
+	Recipient        RecipientInfo `json:"recipient" validate:"required"`
+	Channels         []string `json:"channels" validate:"required,min=1,dive,oneof=SMS EMAIL WHATSAPP PUSH"`
+	CustomMessage    *string `json:"custom_message,omitempty" validate:"omitempty,max=5000"`
+}
+
+// RecipientInfo represents notification recipient details
+type RecipientInfo struct {
+	Name   string  `json:"name" validate:"required,max=200"`
+	Mobile string  `json:"mobile,omitempty" validate:"omitempty,max=15"`
+	Email  string  `json:"email,omitempty" validate:"omitempty,email,max=200"`
+}
+
+// SendBatchNotificationsRequest represents the request for sending batch notifications
+// POST /notifications/send-batch
+// Reference: Batch notifications for bulk operations
+type SendBatchNotificationsRequest struct {
+	Notifications []SendNotificationRequest `json:"notifications" validate:"required,min=1,max=1000,dive"`
+}
+
+// GenerateFeedbackLinkRequest represents the request for generating customer feedback link
+// POST /feedback/generate-link
+// Reference: BR-CLM-DC-020 (Customer feedback)
+type GenerateFeedbackLinkRequest struct {
+	ClaimID       string  `json:"claim_id" validate:"required,max=50"`
+	CustomerEmail *string `json:"customer_email,omitempty" validate:"omitempty,email,max=200"`
+	FeedbackType  *string `json:"feedback_type,omitempty" validate:"omitempty,oneof=CLAIM_PROCESSING CUSTOMER_SERVICE DOCUMENT_QUALITY"` // Default: CLAIM_PROCESSING
+	ExpiryDays    *int    `json:"expiry_days,omitempty" validate:"omitempty,min=1,max=30"` // Default: 7 days
+}
+

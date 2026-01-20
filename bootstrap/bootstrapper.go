@@ -46,6 +46,7 @@ var FxRepo = fx.Module(
 		// External API clients
 		repo.NewCBSClient,
 		repo.NewPFMSClient,
+		repo.NewNotificationClient,
 
 		// Add more repository constructors here as needed
 		// repo.New{Resource}Repository,
@@ -127,6 +128,7 @@ var FxHandler = fx.Module(
 			handler.NewNotificationHandler,
 			fx.As(new(serverHandler.Handler)),
 			fx.ResultTags(serverHandler.ServerControllersGroupTag),
+			fx.Param(new(repo.NotificationClient), new(repo.ClaimRepository)),
 		),
 
 		// Policy service handlers
