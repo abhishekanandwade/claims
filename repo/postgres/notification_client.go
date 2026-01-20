@@ -1,36 +1,64 @@
 package repo
 
 import (
+	"bytes"
 	"context"
+	"crypto/tls"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"time"
 
 	nlog "gitlab.cept.gov.in/it-2.0-common/n-api-log"
+	"gitlab.cept.gov.in/pli/claims-api/configs"
 )
 
 // NotificationClient handles sending notifications via multiple channels
-// This is a placeholder implementation. In production, this would integrate with:
+// Integrates with:
 // 1. SMS Gateway (for SMS notifications)
 // 2. Email Service (for email notifications)
 // 3. WhatsApp Business API (for WhatsApp notifications)
 //
 // Reference: BR-CLM-DC-019 (Communication triggers)
+// Reference: INT-CLM-009 (Email Service), INT-CLM-011 (WhatsApp)
 type NotificationClient struct {
-	// TODO: Add configuration for notification service endpoints
+	config            *configs.Config
+	httpClient        *http.Client
 	smsGatewayURL     string
 	emailServiceURL   string
 	whatsappAPIURL    string
 	authenticationKey string
+	smsEnabled        bool
+	emailEnabled      bool
+	whatsappEnabled   bool
 }
 
 // NewNotificationClient creates a new notification client
-func NewNotificationClient() *NotificationClient {
+func NewNotificationClient(config *configs.Config) *NotificationClient {
+	// Create HTTP client with timeout and TLS config
+	httpClient := &http.Client{
+		Timeout: time.Duration(config.APIClients.NotificationService.Timeout) * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: false, // Set to true only for testing
+			},
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 10,
+			IdleConnTimeout:     90 * time.Second,
+		},
+	}
+
 	return &NotificationClient{
-		// TODO: Load configuration from config.yaml
-		smsGatewayURL:     "",
-		emailServiceURL:   "",
-		whatsappAPIURL:    "",
-		authenticationKey: "",
+		config:            config,
+		httpClient:        httpClient,
+		smsGatewayURL:     config.APIClients.NotificationService.BaseURL + "/sms/send",
+		emailServiceURL:   config.APIClients.NotificationService.BaseURL + "/email/send",
+		whatsappAPIURL:    config.APIClients.NotificationService.BaseURL + "/whatsapp/send",
+		authenticationKey: config.APIClients.NotificationService.APIKey,
+		smsEnabled:        config.APIClients.NotificationService.SMSEnabled,
+		emailEnabled:      config.APIClients.NotificationService.EmailEnabled,
+		whatsappEnabled:   config.APIClients.NotificationService.WhatsappEnabled,
 	}
 }
 
@@ -90,24 +118,20 @@ func (c *NotificationClient) SendMaturityIntimation(ctx context.Context, req *Ma
 }
 
 // sendSMS sends SMS notification
-// TODO: Implement SMS gateway integration
-// Reference: BR-CLM-DC-019
+// Integrates with SMS Gateway API
+// Reference: BR-CLM-DC-019, INT-CLM-010 (SMS Gateway)
 func (c *NotificationClient) sendSMS(ctx context.Context, req *MaturityIntimationRequest) error {
+	if !c.smsEnabled {
+		nlog.Warn(ctx, "SMS notifications are disabled", nil)
+		return nil
+	}
+
 	nlog.Info(ctx, "Sending SMS", map[string]interface{}{
 		"phone":     req.Phone,
 		"policy_id": req.PolicyID,
 	})
 
-	// TODO: Call SMS Gateway API
-	// Example API call:
-	// POST /sms/send
-	// {
-	//   "phone": req.Phone,
-	//   "message": fmt.Sprintf("Dear %s, your policy %s is maturing on %s. Maturity amount: %.2f. Please submit documents.",
-	//     req.CustomerName, req.PolicyNumber, req.MaturityDate.Format("2006-01-02"), req.MaturityAmount)
-	// }
-
-	// Placeholder: Log the message that would be sent
+	// Prepare SMS message
 	message := fmt.Sprintf(
 		"Dear %s, your policy %s is maturing on %s. Maturity amount: %.2f. Please submit documents to initiate claim process.",
 		req.CustomerName,
@@ -116,76 +140,286 @@ func (c *NotificationClient) sendSMS(ctx context.Context, req *MaturityIntimatio
 		req.MaturityAmount,
 	)
 
-	nlog.Info(ctx, "SMS message prepared", map[string]interface{}{
-		"phone":   req.Phone,
-		"message": message,
+	// Prepare SMS Gateway API request
+	smsRequest := map[string]interface{}{
+		"phone":      req.Phone,
+		"message":    message,
+		"template":   "MATURITY_INTIMATION",
+		"policy_id":  req.PolicyID,
+		"customer_id": req.CustomerID,
+	}
+
+	// Marshal request body
+	requestBody, err := json.Marshal(smsRequest)
+	if err != nil {
+		return fmt.Errorf("failed to marshal SMS request: %w", err)
+	}
+
+	// Create HTTP request
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.smsGatewayURL, bytes.NewBuffer(requestBody))
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+
+	// Set headers
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.authenticationKey)
+	httpReq.Header.Set("X-API-Key", c.authenticationKey)
+
+	// Send request
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("SMS gateway API call failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read SMS response: %w", err)
+	}
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		nlog.Error(ctx, "SMS gateway returned non-OK status", map[string]interface{}{
+			"status_code": resp.StatusCode,
+			"response":    string(respBody),
+			"phone":       req.Phone,
+		})
+		return fmt.Errorf("SMS gateway returned status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	// Parse response
+	var smsResponse struct {
+		Success   bool   `json:"success"`
+		MessageID string `json:"message_id"`
+		Error     string `json:"error,omitempty"`
+	}
+
+	if err := json.Unmarshal(respBody, &smsResponse); err != nil {
+		return fmt.Errorf("failed to parse SMS response: %w", err)
+	}
+
+	if !smsResponse.Success {
+		return fmt.Errorf("SMS sending failed: %s", smsResponse.Error)
+	}
+
+	nlog.Info(ctx, "SMS sent successfully", map[string]interface{}{
+		"phone":       req.Phone,
+		"message_id":  smsResponse.MessageID,
+		"policy_id":   req.PolicyID,
 	})
 
 	return nil
 }
 
 // sendEmail sends email notification
-// TODO: Implement email service integration
-// Reference: BR-CLM-DC-019
+// Integrates with Email Service API
+// Reference: BR-CLM-DC-019, INT-CLM-009 (Email Service)
 func (c *NotificationClient) sendEmail(ctx context.Context, req *MaturityIntimationRequest) error {
+	if !c.emailEnabled {
+		nlog.Warn(ctx, "Email notifications are disabled", nil)
+		return nil
+	}
+
 	nlog.Info(ctx, "Sending Email", map[string]interface{}{
 		"email":     req.Email,
 		"policy_id": req.PolicyID,
 	})
 
-	// TODO: Call Email Service API
-	// Example API call:
-	// POST /email/send
-	// {
-	//   "to": req.Email,
-	//   "subject": fmt.Sprintf("Maturity Intimation - Policy %s", req.PolicyNumber),
-	//   "template": "MATURITY_INTIMATION",
-	//   "data": {
-	//     "customer_name": req.CustomerName,
-	//     "policy_number": req.PolicyNumber,
-	//     "maturity_date": req.MaturityDate.Format("2006-01-02"),
-	//     "maturity_amount": req.MaturityAmount,
-	//     "documents_required": ["Policy bond", "NEFT form", "Cancelled cheque", "ID proof"]
-	//   }
-	// }
-
-	// Placeholder: Log the email that would be sent
-	nlog.Info(ctx, "Email prepared", map[string]interface{}{
+	// Prepare email data
+	emailRequest := map[string]interface{}{
 		"to":       req.Email,
 		"subject":  fmt.Sprintf("Maturity Intimation - Policy %s", req.PolicyNumber),
 		"template": "MATURITY_INTIMATION",
+		"data": map[string]interface{}{
+			"customer_name":       req.CustomerName,
+			"policy_number":       req.PolicyNumber,
+			"maturity_date":       req.MaturityDate.Format("2006-01-02"),
+			"maturity_amount":     fmt.Sprintf("%.2f", req.MaturityAmount),
+			"documents_required":  []string{"Policy bond", "NEFT form", "Cancelled cheque", "ID proof"},
+			"claim_submission_url": "https://pli.gov.in/claims/submit",
+		},
+	}
+
+	// Marshal request body
+	requestBody, err := json.Marshal(emailRequest)
+	if err != nil {
+		return fmt.Errorf("failed to marshal email request: %w", err)
+	}
+
+	// Create HTTP request
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.emailServiceURL, bytes.NewBuffer(requestBody))
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+
+	// Set headers
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.authenticationKey)
+	httpReq.Header.Set("X-API-Key", c.authenticationKey)
+
+	// Send request
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("email service API call failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read email response: %w", err)
+	}
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		nlog.Error(ctx, "Email service returned non-OK status", map[string]interface{}{
+			"status_code": resp.StatusCode,
+			"response":    string(respBody),
+			"email":       req.Email,
+		})
+		return fmt.Errorf("email service returned status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	// Parse response
+	var emailResponse struct {
+		Success    bool   `json:"success"`
+		MessageID  string `json:"message_id"`
+		Error      string `json:"error,omitempty"`
+	}
+
+	if err := json.Unmarshal(respBody, &emailResponse); err != nil {
+		return fmt.Errorf("failed to parse email response: %w", err)
+	}
+
+	if !emailResponse.Success {
+		return fmt.Errorf("email sending failed: %s", emailResponse.Error)
+	}
+
+	nlog.Info(ctx, "Email sent successfully", map[string]interface{}{
+		"email":      req.Email,
+		"message_id": emailResponse.MessageID,
+		"policy_id":  req.PolicyID,
 	})
 
 	return nil
 }
 
 // sendWhatsApp sends WhatsApp notification
-// TODO: Implement WhatsApp Business API integration
-// Reference: BR-CLM-DC-019
+// Integrates with WhatsApp Business API
+// Reference: BR-CLM-DC-019, INT-CLM-011 (WhatsApp Business API)
 func (c *NotificationClient) sendWhatsApp(ctx context.Context, req *MaturityIntimationRequest) error {
+	if !c.whatsappEnabled {
+		nlog.Warn(ctx, "WhatsApp notifications are disabled", nil)
+		return nil
+	}
+
 	nlog.Info(ctx, "Sending WhatsApp", map[string]interface{}{
 		"phone":     req.Phone,
 		"policy_id": req.PolicyID,
 	})
 
-	// TODO: Call WhatsApp Business API
-	// Example API call:
-	// POST /whatsapp/send
-	// {
-	//   "phone": req.Phone,
-	//   "template": "maturity_intimation",
-	//   "parameters": {
-	//     "customer_name": req.CustomerName,
-	//     "policy_number": req.PolicyNumber,
-	//     "maturity_date": req.MaturityDate.Format("2006-01-02"),
-	//     "maturity_amount": fmt.Sprintf("%.2f", req.MaturityAmount)
-	//   }
-	// }
+	// Prepare WhatsApp Business API request
+	whatsappRequest := map[string]interface{}{
+		"phone": req.Phone,
+		"template": map[string]interface{}{
+			"name": "maturity_intimation",
+			"language": map[string]interface{}{
+				"code": "en",
+			},
+		},
+		"components": []map[string]interface{}{
+			{
+				"type": "body",
+				"parameters": []map[string]interface{}{
+					{
+						"type": "text",
+						"text": req.CustomerName,
+					},
+					{
+						"type": "text",
+						"text": req.PolicyNumber,
+					},
+					{
+						"type": "text",
+						"text": req.MaturityDate.Format("2006-01-02"),
+					},
+					{
+						"type": "text",
+						"text": fmt.Sprintf("%.2f", req.MaturityAmount),
+					},
+				},
+			},
+		},
+	}
 
-	// Placeholder: Log the WhatsApp message that would be sent
-	nlog.Info(ctx, "WhatsApp message prepared", map[string]interface{}{
-		"phone":    req.Phone,
-		"template": "maturity_intimation",
+	// Marshal request body
+	requestBody, err := json.Marshal(whatsappRequest)
+	if err != nil {
+		return fmt.Errorf("failed to marshal WhatsApp request: %w", err)
+	}
+
+	// Create HTTP request
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.whatsappAPIURL, bytes.NewBuffer(requestBody))
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+
+	// Set headers
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.authenticationKey)
+
+	// Send request
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("WhatsApp API call failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read WhatsApp response: %w", err)
+	}
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
+		nlog.Error(ctx, "WhatsApp API returned non-OK status", map[string]interface{}{
+			"status_code": resp.StatusCode,
+			"response":    string(respBody),
+			"phone":       req.Phone,
+		})
+		return fmt.Errorf("WhatsApp API returned status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	// Parse response
+	var whatsappResponse struct {
+		Messages []struct {
+			ID string `json:"id"`
+		} `json:"messages"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error,omitempty"`
+	}
+
+	if err := json.Unmarshal(respBody, &whatsappResponse); err != nil {
+		return fmt.Errorf("failed to parse WhatsApp response: %w", err)
+	}
+
+	if whatsappResponse.Error != nil {
+		return fmt.Errorf("WhatsApp sending failed: %s", whatsappResponse.Error.Message)
+	}
+
+	messageID := ""
+	if len(whatsappResponse.Messages) > 0 {
+		messageID = whatsappResponse.Messages[0].ID
+	}
+
+	nlog.Info(ctx, "WhatsApp message sent successfully", map[string]interface{}{
+		"phone":       req.Phone,
+		"message_id":  messageID,
+		"policy_id":   req.PolicyID,
 	})
 
 	return nil
@@ -286,9 +520,14 @@ func (c *NotificationClient) SendNotification(ctx context.Context, req *Notifica
 }
 
 // sendGenericSMS sends generic SMS notification
-// TODO: Implement SMS gateway integration
-// Reference: BR-CLM-DC-019
+// Integrates with SMS Gateway API
+// Reference: BR-CLM-DC-019, INT-CLM-010 (SMS Gateway)
 func (c *NotificationClient) sendGenericSMS(ctx context.Context, req *NotificationRequest) error {
+	if !c.smsEnabled {
+		nlog.Warn(ctx, "SMS notifications are disabled", nil)
+		return nil
+	}
+
 	nlog.Info(ctx, "Sending generic SMS", map[string]interface{}{
 		"notification_id": req.NotificationID,
 		"phone":           req.RecipientMobile,
@@ -316,21 +555,91 @@ func (c *NotificationClient) sendGenericSMS(ctx context.Context, req *Notificati
 		}
 	}
 
-	// TODO: Call SMS Gateway API
-	// Placeholder: Log the message that would be sent
-	nlog.Info(ctx, "SMS message prepared", map[string]interface{}{
-		"notification_id": req.NotificationID,
+	// Prepare SMS Gateway API request
+	smsRequest := map[string]interface{}{
+		"phone":      req.RecipientMobile,
+		"message":    message,
+		"template":   req.NotificationType,
+		"metadata": map[string]interface{}{
+			"notification_id": req.NotificationID,
+			"claim_id":        getStringValue(req.ClaimID, ""),
+		},
+	}
+
+	// Marshal request body
+	requestBody, err := json.Marshal(smsRequest)
+	if err != nil {
+		return fmt.Errorf("failed to marshal SMS request: %w", err)
+	}
+
+	// Create HTTP request
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.smsGatewayURL, bytes.NewBuffer(requestBody))
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+
+	// Set headers
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.authenticationKey)
+	httpReq.Header.Set("X-API-Key", c.authenticationKey)
+
+	// Send request
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("SMS gateway API call failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read SMS response: %w", err)
+	}
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		nlog.Error(ctx, "SMS gateway returned non-OK status", map[string]interface{}{
+			"status_code":     resp.StatusCode,
+			"response":        string(respBody),
+			"phone":           req.RecipientMobile,
+			"notification_id": req.NotificationID,
+		})
+		return fmt.Errorf("SMS gateway returned status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	// Parse response
+	var smsResponse struct {
+		Success   bool   `json:"success"`
+		MessageID string `json:"message_id"`
+		Error     string `json:"error,omitempty"`
+	}
+
+	if err := json.Unmarshal(respBody, &smsResponse); err != nil {
+		return fmt.Errorf("failed to parse SMS response: %w", err)
+	}
+
+	if !smsResponse.Success {
+		return fmt.Errorf("SMS sending failed: %s", smsResponse.Error)
+	}
+
+	nlog.Info(ctx, "SMS sent successfully", map[string]interface{}{
 		"phone":           req.RecipientMobile,
-		"message":         message,
+		"message_id":      smsResponse.MessageID,
+		"notification_id": req.NotificationID,
 	})
 
 	return nil
 }
 
 // sendGenericEmail sends generic email notification
-// TODO: Implement email service integration
-// Reference: BR-CLM-DC-019
+// Integrates with Email Service API
+// Reference: BR-CLM-DC-019, INT-CLM-009 (Email Service)
 func (c *NotificationClient) sendGenericEmail(ctx context.Context, req *NotificationRequest) error {
+	if !c.emailEnabled {
+		nlog.Warn(ctx, "Email notifications are disabled", nil)
+		return nil
+	}
+
 	nlog.Info(ctx, "Sending generic Email", map[string]interface{}{
 		"notification_id": req.NotificationID,
 		"email":           req.RecipientEmail,
@@ -353,21 +662,92 @@ func (c *NotificationClient) sendGenericEmail(ctx context.Context, req *Notifica
 		subject = fmt.Sprintf("Update on your Claim - %s", getStringValue(req.ClaimID, ""))
 	}
 
-	// TODO: Call Email Service API
-	// Placeholder: Log the email that would be sent
-	nlog.Info(ctx, "Email prepared", map[string]interface{}{
+	// Prepare email data
+	emailRequest := map[string]interface{}{
+		"to":       req.RecipientEmail,
+		"subject":  subject,
+		"template": req.NotificationType,
+		"data": map[string]interface{}{
+			"recipient_name": req.RecipientName,
+			"claim_id":       getStringValue(req.ClaimID, ""),
+			"custom_message": getStringValue(req.CustomMessage, ""),
+		},
+	}
+
+	// Marshal request body
+	requestBody, err := json.Marshal(emailRequest)
+	if err != nil {
+		return fmt.Errorf("failed to marshal email request: %w", err)
+	}
+
+	// Create HTTP request
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.emailServiceURL, bytes.NewBuffer(requestBody))
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+
+	// Set headers
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.authenticationKey)
+	httpReq.Header.Set("X-API-Key", c.authenticationKey)
+
+	// Send request
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("email service API call failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read email response: %w", err)
+	}
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		nlog.Error(ctx, "Email service returned non-OK status", map[string]interface{}{
+			"status_code":     resp.StatusCode,
+			"response":        string(respBody),
+			"email":           req.RecipientEmail,
+			"notification_id": req.NotificationID,
+		})
+		return fmt.Errorf("email service returned status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	// Parse response
+	var emailResponse struct {
+		Success   bool   `json:"success"`
+		MessageID string `json:"message_id"`
+		Error     string `json:"error,omitempty"`
+	}
+
+	if err := json.Unmarshal(respBody, &emailResponse); err != nil {
+		return fmt.Errorf("failed to parse email response: %w", err)
+	}
+
+	if !emailResponse.Success {
+		return fmt.Errorf("email sending failed: %s", emailResponse.Error)
+	}
+
+	nlog.Info(ctx, "Email sent successfully", map[string]interface{}{
+		"email":           req.RecipientEmail,
+		"message_id":      emailResponse.MessageID,
 		"notification_id": req.NotificationID,
-		"to":              req.RecipientEmail,
-		"subject":         subject,
 	})
 
 	return nil
 }
 
 // sendGenericWhatsApp sends generic WhatsApp notification
-// TODO: Implement WhatsApp Business API integration
-// Reference: BR-CLM-DC-019
+// Integrates with WhatsApp Business API
+// Reference: BR-CLM-DC-019, INT-CLM-011 (WhatsApp Business API)
 func (c *NotificationClient) sendGenericWhatsApp(ctx context.Context, req *NotificationRequest) error {
+	if !c.whatsappEnabled {
+		nlog.Warn(ctx, "WhatsApp notifications are disabled", nil)
+		return nil
+	}
+
 	nlog.Info(ctx, "Sending generic WhatsApp", map[string]interface{}{
 		"notification_id": req.NotificationID,
 		"phone":           req.RecipientMobile,
@@ -388,12 +768,99 @@ func (c *NotificationClient) sendGenericWhatsApp(ctx context.Context, req *Notif
 		template = "payment_processed"
 	}
 
-	// TODO: Call WhatsApp Business API
-	// Placeholder: Log the WhatsApp message that would be sent
-	nlog.Info(ctx, "WhatsApp message prepared", map[string]interface{}{
-		"notification_id": req.NotificationID,
+	// Prepare WhatsApp Business API request
+	whatsappRequest := map[string]interface{}{
+		"phone": req.RecipientMobile,
+		"template": map[string]interface{}{
+			"name": template,
+			"language": map[string]interface{}{
+				"code": "en",
+			},
+		},
+		"components": []map[string]interface{}{
+			{
+				"type": "body",
+				"parameters": []map[string]interface{}{
+					{
+						"type": "text",
+						"text": req.RecipientName,
+					},
+					{
+						"type": "text",
+						"text": getStringValue(req.ClaimID, ""),
+					},
+				},
+			},
+		},
+	}
+
+	// Marshal request body
+	requestBody, err := json.Marshal(whatsappRequest)
+	if err != nil {
+		return fmt.Errorf("failed to marshal WhatsApp request: %w", err)
+	}
+
+	// Create HTTP request
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.whatsappAPIURL, bytes.NewBuffer(requestBody))
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+
+	// Set headers
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.authenticationKey)
+
+	// Send request
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("WhatsApp API call failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read WhatsApp response: %w", err)
+	}
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
+		nlog.Error(ctx, "WhatsApp API returned non-OK status", map[string]interface{}{
+			"status_code":     resp.StatusCode,
+			"response":        string(respBody),
+			"phone":           req.RecipientMobile,
+			"notification_id": req.NotificationID,
+		})
+		return fmt.Errorf("WhatsApp API returned status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	// Parse response
+	var whatsappResponse struct {
+		Messages []struct {
+			ID string `json:"id"`
+		} `json:"messages"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error,omitempty"`
+	}
+
+	if err := json.Unmarshal(respBody, &whatsappResponse); err != nil {
+		return fmt.Errorf("failed to parse WhatsApp response: %w", err)
+	}
+
+	if whatsappResponse.Error != nil {
+		return fmt.Errorf("WhatsApp sending failed: %s", whatsappResponse.Error.Message)
+	}
+
+	messageID := ""
+	if len(whatsappResponse.Messages) > 0 {
+		messageID = whatsappResponse.Messages[0].ID
+	}
+
+	nlog.Info(ctx, "WhatsApp message sent successfully", map[string]interface{}{
 		"phone":           req.RecipientMobile,
-		"template":        template,
+		"message_id":      messageID,
+		"notification_id": req.NotificationID,
 	})
 
 	return nil
